@@ -1,0 +1,216 @@
+diff --git a/mobile/Home.tsx b/mobile/Home.tsx
+--- a/mobile/Home.tsx
++++ b/mobile/Home.tsx
+@@ -27,6 +27,8 @@
+ import { AlgorithmEditor } from '@/components/algorithm-editor';
+ import { DeviceSetup } from '@/components/device-setup';
+ import { PlaybackProgress } from '@/components/playback-progress';
++import { Checkbox } from '@/components/ui/checkbox';
++import { playlistGenres, playlistTrackIds } from './playlist-genres';
+ 
+ 
+ 
+@@ -83,6 +85,10 @@
+   const [dragging, setDragging] = useState(false), dragDepth = useRef(0), importingRef = useRef(false);
+   const [infoOpen, setInfoOpen] = useState(false), [createOpen, setCreateOpen] = useState(false), [playlistName, setPlaylistName] = useState('');
+   const [edit, setEdit] = useState<Track | null>(null), [addTo, setAddTo] = useState<Track | null>(null);
++  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
++  const genreOptions = useMemo(() => createOpen ? playlistGenres(tracks) : [], [createOpen, tracks]);
++  const newPlaylistTrackIds = useMemo(() => createOpen ? playlistTrackIds(tracks, selectedGenres, addTo?.id) : [], [createOpen, tracks, selectedGenres, addTo?.id]);
++  useEffect(() => { if (!createOpen) setSelectedGenres([]); }, [createOpen]);
+   const [confirm, setConfirm] = useState<{ kind: 'track' | 'playlist'; id: string; name: string } | null>(null);
+   const [saving, setSaving] = useState(false), [queueOpen, setQueueOpen] = useState(false);
+   const [songMenuLimit, setSongMenuLimit] = useState(60);
+@@ -279,9 +285,23 @@
+     finally { importingRef.current = false; setImporting(false); }
+   }
+   async function createPlaylist(event: React.FormEvent) {
+-    event.preventDefault(); const name = playlistName.trim(); if (!name || saving) return; setSaving(true);
+-    try { const p: Playlist = { id: crypto.randomUUID(), name, trackIds: addTo ? [addTo.id] : [], createdAt: Date.now() }; await savePlaylist(p); setPlaylists(old => [...old, p]); setPlaylistName(''); setCreateOpen(false); setAddTo(null); go(p.id); toast.success('Playlist creata.'); }
+-    catch { toast.error('Non riesco a salvare la playlist. Riprova.'); } finally { setSaving(false); }
++    event.preventDefault();
++    const name = playlistName.trim();
++    if (!name || saving || !ready || loadError) return;
++    if (selectedGenres.length && !newPlaylistTrackIds.length) {
++      toast.error('Nessun brano disponibile per i generi selezionati.');
++      return;
++    }
++    setSaving(true);
++    try {
++      const p: Playlist = { id: crypto.randomUUID(), name, trackIds: newPlaylistTrackIds, createdAt: Date.now() };
++      await savePlaylist(p);
++      setPlaylists(old => [...old, p]);
++      setPlaylistName(''); setSelectedGenres([]); setCreateOpen(false); setAddTo(null);
++      go(p.id);
++      toast.success(p.trackIds.length ? `Playlist creata con ${p.trackIds.length} ${p.trackIds.length === 1 ? 'brano' : 'brani'}.` : 'Playlist creata.');
++    } catch { toast.error('Non riesco a salvare la playlist. Riprova.'); }
++    finally { setSaving(false); }
+   }
+   async function addTrackToPlaylist(p: Playlist) {
+     if (!addTo || saving) return; if (p.trackIds.includes(addTo.id)) { toast.info('Il brano è già in questa playlist.'); return; } setSaving(true);
+@@ -356,7 +376,35 @@
+     <div className="player" role="region" aria-label="Lettore musicale"><div className="now-playing"><Artwork track={current} /><div className="now-playing-text"><strong>{current?.title || 'La tua prossima traccia'}</strong><span>{current?.artist || 'Scegli un brano e mettiti comodo.'}</span></div>{current && <IconButton className="player-heart" label={current.liked ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'} active={current.liked} onClick={() => void patch(current.id, t => ({ ...t, liked: !t.liked }))}><Heart size={19} fill={current.liked ? 'currentColor' : 'none'} /></IconButton>}</div><button type="button" className="player-song-menu" aria-label="Apri menu canzoni" aria-haspopup="dialog" aria-expanded={queueOpen} aria-controls="song-menu" onClick={openSongs}><ListMusic size={20} /><span>Canzoni</span></button><div className="player-center">{playbackControls()}<PlaybackProgress currentId={currentId} duration={duration} onSeek={seek} /></div><div className="player-extras"><IconButton label="Apri menu canzoni" active={queueOpen} aria-haspopup="dialog" aria-expanded={queueOpen} aria-controls="song-menu" onClick={openSongs}><ListMusic size={20} /></IconButton><div className="player-divider" /><IconButton label={volume === 0 ? 'Attiva audio' : 'Disattiva audio'} onClick={() => setVolume(volume === 0 ? 0.7 : 0)}>{volume === 0 ? <VolumeX size={19} /> : <Volume2 size={19} />}</IconButton><Slider aria-label="Volume" min={0} max={1} step={0.01} value={[volume]} onValueChange={v => setVolume(v[0])} className="volume-slider" /></div></div>
+ 
+     <Toaster theme="dark" position="top-right" richColors closeButton />
+-    <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogContent className="onda-dialog"><DialogHeader><DialogTitle>Una nuova playlist</DialogTitle><DialogDescription>Un nome per le canzoni che stanno bene insieme.</DialogDescription></DialogHeader><form onSubmit={createPlaylist} className="dialog-form"><label>Nome della playlist<Input autoFocus placeholder="Es. Sulla strada di casa" value={playlistName} maxLength={70} onChange={e => setPlaylistName(e.target.value)} required /></label><button className="button primary" disabled={!playlistName.trim() || saving}>{saving ? 'Salvataggio…' : 'Crea playlist'}</button></form></DialogContent></Dialog>
++    <Dialog open={createOpen} onOpenChange={open => { if (!saving) setCreateOpen(open); }}>
++      <DialogContent className="onda-dialog">
++        <DialogHeader><DialogTitle>Una nuova playlist</DialogTitle>
++          <DialogDescription>Scegli un nome e i generi delle canzoni che hai caricato.</DialogDescription>
++        </DialogHeader>
++        <form onSubmit={createPlaylist} className="dialog-form">
++          <label>Nome della playlist<Input autoFocus placeholder="La mia playlist" value={playlistName} maxLength={70}
++            onChange={e => setPlaylistName(e.target.value)} required disabled={saving} /></label>
++          <fieldset className="playlist-genre-field" disabled={saving} aria-describedby="playlist-genre-help">
++            <legend>I tuoi generi</legend>
++            <p id="playlist-genre-help" className="playlist-genre-help">Questi generi provengono dalle canzoni della tua libreria. Puoi selezionarne più di uno.</p>
++            {genreOptions.length ? <div className="playlist-genre-list">
++              {genreOptions.map(genre => <label key={genre.key} className="playlist-genre-option">
++                <Checkbox checked={selectedGenres.includes(genre.key)} disabled={saving}
++                  onCheckedChange={checked => setSelectedGenres(old => checked === true ? [...new Set([...old, genre.key])] : old.filter(key => key !== genre.key))} />
++                <span>{genre.label}</span><small>{genre.count} {genre.count === 1 ? 'brano' : 'brani'}</small>
++              </label>)}
++            </div> : <p className="playlist-genre-help">{!ready ? 'Caricamento dei generi…' : loadError ? 'Impossibile leggere i generi. Riprova a caricare la libreria.' : tracks.length ? 'I brani non hanno un genere. Puoi aggiungerlo dalle informazioni del brano.' : 'Importa dei brani per trovare qui i loro generi.'}</p>}
++          </fieldset>
++          {addTo && <p className="playlist-genre-help">Il brano “{addTo.title}” sarà incluso nella playlist.</p>}
++          <p className="playlist-genre-summary" role="status" aria-live="polite">
++            {newPlaylistTrackIds.length ? `${newPlaylistTrackIds.length} ${newPlaylistTrackIds.length === 1 ? 'brano verrà aggiunto' : 'brani verranno aggiunti'}.` : selectedGenres.length ? 'Nessun brano disponibile per i generi selezionati.' : 'Senza generi selezionati, la playlist sarà vuota.'}
++          </p>
++          <button className="button primary" disabled={!playlistName.trim() || saving || !ready || !!loadError || (selectedGenres.length > 0 && newPlaylistTrackIds.length === 0)}>
++            {saving ? 'Salvataggio…' : 'Crea playlist'}
++          </button>
++        </form>
++      </DialogContent>
++    </Dialog>
+     <Dialog open={!!addTo && !createOpen} onOpenChange={open => { if (!open) setAddTo(null); }}><DialogContent className="onda-dialog"><DialogHeader><DialogTitle>Aggiungi a una playlist</DialogTitle><DialogDescription>{addTo?.title}</DialogDescription></DialogHeader><div className="playlist-options">{playlists.map(p => <button key={p.id} onClick={() => void addTrackToPlaylist(p)} disabled={saving || p.trackIds.includes(addTo?.id || '')}><ListMusic size={20} /><span>{p.name}<small>{p.trackIds.length} brani</small></span>{p.trackIds.includes(addTo?.id || '') ? <Check size={18} /> : <Plus size={18} />}</button>)}</div><button className="button outline" onClick={() => setCreateOpen(true)}><Plus size={18} />Crea una nuova playlist</button></DialogContent></Dialog>
+     <Dialog open={!!edit} onOpenChange={open => { if (!open) setEdit(null); }}><DialogContent className="onda-dialog"><DialogHeader><DialogTitle>Informazioni del brano</DialogTitle><DialogDescription>Le modifiche riguardano solo la libreria di Onda. Il file originale resta intatto.</DialogDescription></DialogHeader>{edit && <form className="dialog-form" onSubmit={async e => { e.preventDefault(); if (!edit.title.trim() || saving) return; setSaving(true); const result = await patch(edit.id, t => ({ ...t, title: edit.title.trim(), artist: edit.artist.trim() || 'Artista sconosciuto', album: edit.album.trim(), genre: edit.genre.trim() })); setSaving(false); if (result) { setEdit(null); toast.success('Informazioni aggiornate.'); } }}>{(['title', 'artist', 'album', 'genre'] as const).map((key, i) => <label key={key}>{['Titolo', 'Artista', 'Album', 'Genere'][i]}<Input value={edit[key]} required={key === 'title'} maxLength={160} onChange={e => setEdit({ ...edit, [key]: e.target.value })} /></label>)}<span className="file-detail">{edit.filename} · {formatSize(edit.size)} · {edit.format}</span><button className="button primary" disabled={saving || !edit.title.trim()}>{saving ? 'Salvataggio…' : 'Salva modifiche'}</button></form>}</DialogContent></Dialog>
+     <AlertDialog open={!!confirm} onOpenChange={open => { if (!open && !saving) setConfirm(null); }}><AlertDialogContent className="onda-dialog"><AlertDialogHeader><AlertDialogTitle>{confirm?.kind === 'track' ? 'Rimuovere questo brano?' : 'Eliminare questa playlist?'}</AlertDialogTitle><AlertDialogDescription>{confirm?.kind === 'track' ? `“${confirm.name}” verrà rimosso dalla libreria, dalle playlist e dalla cronologia locale. Il file originale sul dispositivo resta intatto.` : `La playlist “${confirm?.name}” verrà eliminata. I suoi brani resteranno nella libreria.`}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={saving}>Annulla</AlertDialogCancel><AlertDialogAction className="delete-confirm" disabled={saving} onClick={e => { e.preventDefault(); void deletion(); }}>{saving ? 'Rimozione…' : 'Rimuovi'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+diff --git a/mobile/playlist-genres.ts b/mobile/playlist-genres.ts
+new file mode 100644
+--- /dev/null
++++ b/mobile/playlist-genres.ts
+@@ -0,0 +1,45 @@
++type GenreTrack = { id: string; genre?: string | null };
++export type PlaylistGenre = { key: string; label: string; count: number };
++
++function genreLabel(value: string | null | undefined): string {
++  return (value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
++}
++
++function genreKey(value: string | null | undefined): string {
++  return genreLabel(value).toLocaleLowerCase('it-IT');
++}
++
++// Compound names (for example R&B or Pop/Rock) remain exactly one genre.
++export function playlistGenres(tracks: readonly GenreTrack[]): PlaylistGenre[] {
++  const groups = new Map<string, PlaylistGenre>();
++  const seen = new Set<string>();
++  for (const track of tracks) {
++    if (seen.has(track.id)) continue;
++    seen.add(track.id);
++    const label = genreLabel(track.genre);
++    if (!label) continue;
++    const key = genreKey(label);
++    const group = groups.get(key);
++    if (group) group.count++;
++    else groups.set(key, { key, label, count: 1 });
++  }
++  return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, 'it-IT', { sensitivity: 'base' }));
++}
++
++// A regular playlist: capture today's matching tracks, preserving their order.
++export function playlistTrackIds(
++  tracks: readonly GenreTrack[],
++  selectedGenres: readonly string[],
++  initialTrackId?: string,
++): string[] {
++  const selected = new Set(selectedGenres.map(genreKey).filter(Boolean));
++  const ids = new Set<string>();
++  if (initialTrackId && tracks.some(track => track.id === initialTrackId)) ids.add(initialTrackId);
++  const seen = new Set<string>();
++  for (const track of tracks) {
++    if (seen.has(track.id)) continue;
++    seen.add(track.id);
++    if (selected.has(genreKey(track.genre))) ids.add(track.id);
++  }
++  return [...ids];
++}
+diff --git a/mobile/native.css b/mobile/native.css
+--- a/mobile/native.css
++++ b/mobile/native.css
+@@ -11,3 +11,14 @@
+ .update-working { display: flex; align-items: center; gap: .5rem; }
+ .update-help { color: #c4cec5; font-size: .875rem; line-height: 1.55; }
+ .device-button.update-available { border-color: #b1eb81; color: #b1eb81; }
++
++.playlist-genre-field { min-width: 0; border: 0; padding: 0; margin: 0; }
++.playlist-genre-field legend { font-size: .9375rem; font-weight: 600; color: var(--foreground); }
++.playlist-genre-help { margin-block: .45rem; font-size: .875rem; line-height: 1.55; color: var(--muted-foreground); }
++.playlist-genre-list { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; margin-top: .75rem; border: 1px solid var(--border); border-radius: 9px; }
++.dialog-form .playlist-genre-option { display: grid; grid-template-columns: 1rem minmax(0, 1fr) auto; align-items: center; gap: .75rem; min-height: 46px; padding: .65rem .85rem; cursor: pointer; }
++.playlist-genre-option + .playlist-genre-option { border-top: 1px solid var(--border); }
++.playlist-genre-option span { overflow-wrap: anywhere; }
++.playlist-genre-option small { color: var(--muted-foreground); font-size: .875rem; }
++.playlist-genre-option:has([data-state=checked]) { background: #26351d; }
++.playlist-genre-summary { color: var(--primary); font-size: .9375rem; line-height: 1.5; }
+diff --git a/android/release.properties b/android/release.properties
+--- a/android/release.properties
++++ b/android/release.properties
+@@ -1,4 +1,4 @@
+ # Configurazione Onda Android
+-versionCode=2
+-versionName=1.1.0
++versionCode=3
++versionName=1.2.0
+ updateUrl=https://github.com/giovanniintrieri/ONDA/releases/latest/download/update.json
+diff --git a/tests/playlist-genres.test.mjs b/tests/playlist-genres.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/tests/playlist-genres.test.mjs
+@@ -0,0 +1,46 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { readFileSync } from 'node:fs';
++import ts from 'typescript';
++
++const source = readFileSync(new URL('../mobile/playlist-genres.ts', import.meta.url), 'utf8');
++const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ES2020 } }).outputText;
++const { playlistGenres, playlistTrackIds } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
++
++test('I generi ignorano maiuscole e spazi senza inventare categorie per i brani non classificati', () => {
++  const tracks = [{ id: 'a', genre: ' Rock ' }, { id: 'b', genre: 'ROCK' },
++    { id: 'c', genre: 'Alternative   Metal' }, { id: 'd', genre: null }, { id: 'e', genre: '' }, { id: 'f' }];
++  assert.deepEqual(playlistGenres(tracks), [
++    { key: 'alternative metal', label: 'Alternative Metal', count: 1 },
++    { key: 'rock', label: 'Rock', count: 2 },
++  ]);
++  assert.deepEqual(playlistTrackIds(tracks, ['rock']), ['a', 'b']);
++  assert.deepEqual(playlistTrackIds(tracks, ['Alternative Metal']), ['c']);
++});
++
++test('Più generi producono una playlist unica; il brano di partenza compare una sola volta', () => {
++  const tracks = [{ id: 'a', genre: 'Rock' }, { id: 'b', genre: 'Jazz' }, { id: 'c', genre: 'Pop' }, { id: 'a', genre: 'Rock' }];
++  assert.deepEqual(playlistTrackIds(tracks, ['rock', 'jazz']), ['a', 'b']);
++  assert.deepEqual(playlistTrackIds(tracks, ['rock', 'jazz'], 'a'), ['a', 'b']);
++  assert.deepEqual(playlistTrackIds(tracks, ['rock'], 'c'), ['c', 'a']);
++  assert.equal(playlistGenres(tracks).find(g => g.key === 'rock').count, 1);
++});
++
++test('Resta possibile creare una playlist vuota o con il solo brano scelto', () => {
++  const tracks = [{ id: 'a', genre: 'Rock' }];
++  assert.deepEqual(playlistTrackIds(tracks, []), []);
++  assert.deepEqual(playlistTrackIds(tracks, [], 'a'), ['a']);
++  assert.deepEqual(playlistTrackIds(tracks, ['jazz'], 'removed'), []);
++  assert.deepEqual(playlistGenres([]), []);
++});
++
++test('I nomi composti restano integri e la playlist salvata è una selezione statica', () => {
++  const tracks = [{ id: 'a', genre: 'Pop/Rock' }, { id: 'b', genre: 'R&B' }];
++  const saved = playlistTrackIds(tracks, ['pop/rock']);
++  assert.deepEqual(saved, ['a']);
++  assert.deepEqual(playlistTrackIds(tracks, ['rock']), []);
++  assert.deepEqual(playlistTrackIds(tracks, ['r&b']), ['b']);
++  tracks.push({ id: 'c', genre: 'Pop/Rock' });
++  assert.deepEqual(saved, ['a']);
++  assert.deepEqual(playlistTrackIds(tracks, ['pop/rock']), ['a', 'c']);
++});

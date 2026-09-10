@@ -1,0 +1,175 @@
+diff --git a/mobile/Home.tsx b/mobile/Home.tsx
+--- a/mobile/Home.tsx
++++ b/mobile/Home.tsx
+@@ -323,7 +323,23 @@
+   }
+   const visibleTracks = useMemo(() => view === 'favorites' ? tracks.filter(t => t.liked) : playlist ? playlist.trackIds.map(id => tracks.find(t => t.id === id)).filter((t): t is Track => !!t) : view === 'home' ? [...tracks].sort((a, b) => b.addedAt - a.addedAt).slice(0, 5) : tracks, [tracks, view, playlist]);
+   const columns = useMemo<ColumnDef<Track>[]>(() => [{ accessorKey: 'title' }, { accessorKey: 'artist' }, { accessorKey: 'album' }, { accessorKey: 'genre' }, { accessorKey: 'addedAt' }, { accessorKey: 'duration' }], []);
+-  const table = useReactTable({ data: visibleTracks, columns, state: { globalFilter: search, sorting: playlist ? [] : sorting }, onSortingChange: setSorting, onGlobalFilterChange: setSearch, getCoreRowModel: getCoreRowModel(), getFilteredRowModel: getFilteredRowModel(), getSortedRowModel: getSortedRowModel(), globalFilterFn: (row, _column, value: string) => `${row.original.title} ${row.original.artist} ${row.original.album} ${row.original.genre}`.toLocaleLowerCase('it').includes(value.toLocaleLowerCase('it')) });
++  const table = useReactTable({
++    data: visibleTracks,
++    columns,
++    state: { globalFilter: search, sorting },
++    // Keep playlist order; library sorting stays available when leaving it.
++    manualSorting: !!playlist,
++    // Visible rows are managed by tableLimit, without table pagination resets.
++    autoResetPageIndex: false,
++    onSortingChange: setSorting,
++    onGlobalFilterChange: setSearch,
++    getCoreRowModel: getCoreRowModel(),
++    getFilteredRowModel: getFilteredRowModel(),
++    getSortedRowModel: getSortedRowModel(),
++    globalFilterFn: (row, _column, value: string) =>
++      `${row.original.title} ${row.original.artist} ${row.original.album} ${row.original.genre}`
++        .toLocaleLowerCase('it').includes(value.toLocaleLowerCase('it')),
++  });
+   const displayed = table.getRowModel().rows.map(r => r.original);
+   const title = view === 'algorithm' ? 'Il tuo algoritmo.' : view === 'home' ? 'La tua musica, oggi.' : view === 'library' ? 'La tua libreria' : view === 'favorites' ? 'I tuoi preferiti' : playlist?.name || 'La tua libreria';
+   const pickFiles = () => { void pickNative(false); }, pickFolder = () => { void pickNative(true); };
+diff --git a/app/page.tsx b/app/page.tsx
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -633,7 +633,23 @@
+   }
+   const visibleTracks = useMemo(() => view === 'favorites' ? tracks.filter(t => t.liked) : playlist ? playlist.trackIds.map(id => tracks.find(t => t.id === id)).filter((t): t is Track => !!t) : view === 'home' ? [...tracks].sort((a, b) => b.addedAt - a.addedAt).slice(0, 5) : tracks, [tracks, view, playlist]);
+   const columns = useMemo<ColumnDef<Track>[]>(() => [{ accessorKey: 'title' }, { accessorKey: 'artist' }, { accessorKey: 'album' }, { accessorKey: 'genre' }, { accessorKey: 'addedAt' }, { accessorKey: 'duration' }], []);
+-  const table = useReactTable({ data: visibleTracks, columns, state: { globalFilter: search, sorting: playlist ? [] : sorting }, onSortingChange: setSorting, onGlobalFilterChange: setSearch, getCoreRowModel: getCoreRowModel(), getFilteredRowModel: getFilteredRowModel(), getSortedRowModel: getSortedRowModel(), globalFilterFn: (row, _column, value: string) => `${row.original.title} ${row.original.artist} ${row.original.album} ${row.original.genre}`.toLocaleLowerCase('it').includes(value.toLocaleLowerCase('it')) });
++  const table = useReactTable({
++    data: visibleTracks,
++    columns,
++    state: { globalFilter: search, sorting },
++    // Keep playlist order; library sorting stays available when leaving it.
++    manualSorting: !!playlist,
++    // Visible rows are managed by tableLimit, without table pagination resets.
++    autoResetPageIndex: false,
++    onSortingChange: setSorting,
++    onGlobalFilterChange: setSearch,
++    getCoreRowModel: getCoreRowModel(),
++    getFilteredRowModel: getFilteredRowModel(),
++    getSortedRowModel: getSortedRowModel(),
++    globalFilterFn: (row, _column, value: string) =>
++      `${row.original.title} ${row.original.artist} ${row.original.album} ${row.original.genre}`
++        .toLocaleLowerCase('it').includes(value.toLocaleLowerCase('it')),
++  });
+   const displayed = table.getRowModel().rows.map(r => r.original);
+   const title = view === 'algorithm' ? 'Il tuo algoritmo.' : view === 'home' ? 'La tua musica, oggi.' : view === 'library' ? 'La tua libreria' : view === 'favorites' ? 'I tuoi preferiti' : playlist?.name || 'La tua libreria';
+   const pickFiles = () => fileInput.current?.click(), pickFolder = () => folderInput.current?.click();
+diff --git a/android/release.properties b/android/release.properties
+--- a/android/release.properties
++++ b/android/release.properties
+@@ -1,4 +1,4 @@
+ # Configurazione Onda Android
+-versionCode=3
+-versionName=1.2.0
++versionCode=4
++versionName=1.2.1
+ updateUrl=https://github.com/giovanniintrieri/ONDA/releases/latest/download/update.json
+diff --git a/tests/playlist-table.test.mjs b/tests/playlist-table.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/tests/playlist-table.test.mjs
+@@ -0,0 +1,104 @@
++import assert from 'node:assert/strict';
++import { readFileSync } from 'node:fs';
++import path from 'node:path';
++import test from 'node:test';
++import { fileURLToPath } from 'node:url';
++import ts from 'typescript';
++import { createTable, getCoreRowModel, getFilteredRowModel, getSortedRowModel } from '@tanstack/react-table';
++
++const sourceRoot = process.env.ONDA_TABLE_TEST_SOURCE_ROOT || fileURLToPath(new URL('..', import.meta.url));
++
++// Run each screen's actual table configuration against the installed table engine.
++// The controlled-state loop follows useReactTable, without a DOM or Android SDK.
++function screenOptions(relativePath) {
++  const filename = path.join(sourceRoot, relativePath);
++  const ast = ts.createSourceFile(filename, readFileSync(filename, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
++  const calls = [];
++  function visit(node) {
++    if (ts.isCallExpression(node) && node.expression.getText(ast) === 'useReactTable') calls.push(node);
++    ts.forEachChild(node, visit);
++  }
++  visit(ast);
++  assert.equal(calls.length, 1, 'La schermata deve avere una configurazione della tabella');
++  const source = `function options(visibleTracks, columns, search, sorting, playlist, setSorting, setSearch) {
++    return ${calls[0].arguments[0].getText(ast)};
++  }`;
++  const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
++  return new Function('getCoreRowModel', 'getFilteredRowModel', 'getSortedRowModel', code + '; return options;')(
++    getCoreRowModel, getFilteredRowModel, getSortedRowModel,
++  );
++}
++
++const tracks = [
++  { id: 'a', title: 'Zulu', artist: 'Artista', album: 'Album', genre: 'Rock', addedAt: 1, duration: 100 },
++  { id: 'b', title: 'Alpha', artist: 'Artista', album: 'Album', genre: 'Jazz', addedAt: 2, duration: 100 },
++  { id: 'c', title: 'Delta', artist: 'Artista', album: 'Album', genre: 'Rock', addedAt: 3, duration: 100 },
++];
++const columns = ['title', 'artist', 'album', 'genre', 'addedAt', 'duration'].map(accessorKey => ({ accessorKey }));
++const apply = (updater, previous) => typeof updater === 'function' ? updater(previous) : updater;
++
++function mount(options) {
++  const table = createTable({ data: [], columns, state: {}, onStateChange() {}, renderFallbackValue: null });
++  let state = table.initialState;
++  let dirty = false;
++  let input = { visibleTracks: tracks, search: '', sorting: [{ id: 'title', desc: false }], playlist: null };
++  const control = key => updater => { input[key] = apply(updater, input[key]); dirty = true; };
++  const setSorting = control('sorting'), setSearch = control('search');
++  function render(changes = {}) {
++    input = { ...input, ...changes };
++    const next = options(input.visibleTracks, columns, input.search, input.sorting, input.playlist, setSorting, setSearch);
++    table.setOptions(previous => ({
++      ...previous, ...next, state: { ...state, ...next.state },
++      onStateChange: updater => { state = apply(updater, state); dirty = true; },
++    }));
++    return table.getRowModel().rows.map(row => row.original.id);
++  }
++  async function settle() {
++    let idle = 0;
++    for (let i = 0; i < 40; i++) {
++      await Promise.resolve();
++      if (dirty) { dirty = false; render(); idle = 0; }
++      else if (++idle === 3) return;
++    }
++    assert.fail('La tabella continua ad aggiornarsi dopo 40 cicli');
++  }
++  return { table, render, settle };
++}
++
++for (const screen of ['mobile/Home.tsx', 'app/page.tsx']) {
++  test(`${screen}: aprire e usare una playlist termina gli aggiornamenti e mantiene ordine e ricerca`, async () => {
++    const app = mount(screenOptions(screen));
++    assert.deepEqual(app.render(), ['b', 'c', 'a']);
++    await app.settle();
++
++    const playlist = { id: 'playlist-rock', trackIds: ['a', 'c'] };
++    assert.deepEqual(app.render({ playlist, visibleTracks: [tracks[0], tracks[2]] }), ['a', 'c']);
++    await app.settle();
++
++    // Native playback / library refreshes replace track objects while the playlist is open.
++    assert.deepEqual(app.render({ visibleTracks: [tracks[0], tracks[2]].map(track => ({ ...track })) }), ['a', 'c']);
++    await app.settle();
++
++    app.table.setGlobalFilter('Delta');
++    await app.settle();
++    assert.deepEqual(app.render(), ['c']);
++    app.table.setGlobalFilter('nessun risultato');
++    await app.settle();
++    assert.deepEqual(app.render(), []);
++    app.table.setGlobalFilter('');
++    await app.settle();
++    assert.deepEqual(app.render(), ['a', 'c']);
++
++    assert.deepEqual(app.render({ visibleTracks: [tracks[2]] }), ['c']);
++    await app.settle();
++    assert.deepEqual(app.render({ playlist: { id: 'empty', trackIds: [] }, visibleTracks: [] }), []);
++    await app.settle();
++
++    assert.deepEqual(app.render({ playlist: null, visibleTracks: tracks }), ['b', 'c', 'a']);
++    await app.settle();
++    app.table.setSorting([{ id: 'title', desc: true }]);
++    await app.settle();
++    assert.deepEqual(app.render(), ['a', 'c', 'b']);
++    await app.settle();
++  });
++}

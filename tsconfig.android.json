@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "plugins": [], "incremental": false,
+    "paths": {
+      "@/lib/music": ["./mobile/music.ts"],
+      "@/components/device-setup": ["./mobile/device-setup.tsx"],
+      "@/components/playback-progress": ["./mobile/playback-progress.tsx"],
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["mobile/**/*.ts", "mobile/**/*.tsx", "vite.android.config.ts"],
+  "exclude": ["node_modules", "android"]
+}

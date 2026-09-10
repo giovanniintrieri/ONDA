@@ -1,0 +1,67 @@
+plugins { id 'com.android.application' }
+
+def releaseConfig = new Properties()
+def releaseFile = rootProject.file('release.properties')
+if (releaseFile.exists()) releaseFile.withInputStream { releaseConfig.load(it) }
+def appVersionCode = releaseConfig.getProperty('versionCode', '2').toInteger()
+def appVersionName = releaseConfig.getProperty('versionName', '1.1.0')
+def updateUrl = releaseConfig.getProperty('updateUrl', '').trim()
+if (appVersionCode < 1 || appVersionCode > 2100000000) throw new GradleException('versionCode non valido')
+if (!updateUrl.isEmpty()) {
+    def uri = new URI(updateUrl)
+    if (uri.scheme != 'https' || !uri.host || uri.userInfo || uri.fragment) {
+        throw new GradleException('updateUrl deve essere un indirizzo HTTPS senza credenziali')
+    }
+}
+
+android {
+    namespace 'it.onda.player'
+    compileSdk 36
+    buildFeatures { buildConfig true }
+    defaultConfig {
+        applicationId 'it.onda.player'
+        minSdk 26
+        targetSdk 36
+        versionCode appVersionCode
+        versionName appVersionName
+        buildConfigField 'String', 'UPDATE_MANIFEST_URL', groovy.json.JsonOutput.toJson(updateUrl)
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildTypes {
+        release { minifyEnabled false }
+    }
+}
+
+dependencies {
+    implementation 'androidx.activity:activity:1.10.1'
+    implementation 'androidx.core:core:1.16.0'
+    implementation 'androidx.webkit:webkit:1.14.0'
+    implementation 'androidx.documentfile:documentfile:1.1.0'
+    implementation 'androidx.media3:media3-exoplayer:1.9.3'
+    implementation 'androidx.media3:media3-session:1.9.3'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+tasks.register('checkWebAssets') {
+    doLast {
+        if (!file('src/main/assets/ui/index.html').exists()) {
+            throw new GradleException('Genera prima l’interfaccia: dalla cartella Onda esegui node node_modules/vite/bin/vite.js build --config vite.android.config.ts')
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn 'checkWebAssets' }
+
+// Records the configuration actually used by this build, including the update source.
+tasks.matching { it.name == 'assembleDebug' }.configureEach {
+    doLast {
+        def stamp = layout.buildDirectory.file('outputs/apk/debug/onda-build.json').get().asFile
+        stamp.parentFile.mkdirs()
+        stamp.text = groovy.json.JsonOutput.toJson([
+            applicationId: 'it.onda.player', versionCode: appVersionCode,
+            versionName: appVersionName, updateUrl: updateUrl
+        ])
+    }
+}

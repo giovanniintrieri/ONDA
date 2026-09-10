@@ -1,0 +1,24 @@
+/* System bars and keyboard insets are applied by the Android Activity. */
+html, body, #root { min-height: 100%; background: #141615; }
+body { overscroll-behavior-y: none; }
+button, a, input { -webkit-tap-highlight-color: transparent; }
+.app-update-panel { display: grid; gap: 0.85rem; padding-block: 1rem; border-block: 1px solid rgba(255,255,255,.14); }
+.app-update-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.app-update-heading h3 { margin: 0; font-size: 1rem; font-weight: 650; }
+.app-update-heading span, .update-size { font-size: .875rem; color: #b9c4ba; }
+.app-update-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+.app-update-actions .button { min-height: 44px; height: auto; white-space: normal; text-align: center; }
+.update-working { display: flex; align-items: center; gap: .5rem; }
+.update-help { color: #c4cec5; font-size: .875rem; line-height: 1.55; }
+.device-button.update-available { border-color: #b1eb81; color: #b1eb81; }
+
+.playlist-genre-field { min-width: 0; border: 0; padding: 0; margin: 0; }
+.playlist-genre-field legend { font-size: .9375rem; font-weight: 600; color: var(--foreground); }
+.playlist-genre-help { margin-block: .45rem; font-size: .875rem; line-height: 1.55; color: var(--muted-foreground); }
+.playlist-genre-list { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; margin-top: .75rem; border: 1px solid var(--border); border-radius: 9px; }
+.dialog-form .playlist-genre-option { display: grid; grid-template-columns: 1rem minmax(0, 1fr) auto; align-items: center; gap: .75rem; min-height: 46px; padding: .65rem .85rem; cursor: pointer; }
+.playlist-genre-option + .playlist-genre-option { border-top: 1px solid var(--border); }
+.playlist-genre-option span { overflow-wrap: anywhere; }
+.playlist-genre-option small { color: var(--muted-foreground); font-size: .875rem; }
+.playlist-genre-option:has([data-state=checked]) { background: #26351d; }
+.playlist-genre-summary { color: var(--primary); font-size: .9375rem; line-height: 1.5; }
