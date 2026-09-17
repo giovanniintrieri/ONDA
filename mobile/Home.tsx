@@ -74,6 +74,29 @@ function Navigation({ view, go, playlists, counts, onCreate, bytes, onInfo }: { 
 }
 
 export default function Home() {
+    const playerElement = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const element = playerElement.current;
+    if (!element) return;
+
+    const updatePlayerHeight = () => {
+      document.documentElement.style.setProperty(
+        '--onda-player-height',
+        `${Math.ceil(element.getBoundingClientRect().height)}px`,
+      );
+    };
+
+    updatePlayerHeight();
+
+    const observer = new ResizeObserver(updatePlayerHeight);
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty('--onda-player-height');
+    };
+  }, []);
   const [tracks, setTracks] = useState<Track[]>([]), [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [ready, setReady] = useState(false), [loadError, setLoadError] = useState('');
   const [view, setView] = useState<View>('home'), [search, setSearch] = useState('');
@@ -388,35 +411,128 @@ disabled={!tracks.length} onClick={togglePlay}>{playerLoading ? <Loader2 size={2
       </>}
       </div>{dragging && <div className="drop-overlay"><FolderOpen size={58} /><h2>Lascia qui la tua musica.</h2><p>I file restano su questo dispositivo.</p></div>}
     </main>
-    <div className="player" role="region" aria-label="Lettore musicale"><div className="now-playing"><Artwork track={current} /><div className="now-playing-text"><strong>{current?.title || 'La tua prossima traccia'}</strong><span>{current?.artist || 'Scegli un brano e mettiti comodo.'}</span></div>{current && <IconButton className="player-heart" label={current.liked ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'} active={current.liked} onClick={() => void patch(current.id, t => ({ ...t, liked: !t.liked }))}><Heart size={19} fill={current.liked ? 'currentColor' : 'none'} /></IconButton>}</div><button type="button" className="player-song-menu" aria-label="Apri menu canzoni" aria-haspopup="dialog" aria-expanded={queueOpen} aria-controls="song-menu" onClick={openSongs}><ListMusic size={20} /><span>Canzoni</span></button><div className="player-center">{playbackControls()}<PlaybackProgress currentId={currentId} duration={duration} onSeek={seek} /></div><div className="player-extras"><IconButton label="Apri menu canzoni" active={queueOpen} aria-haspopup="dialog" aria-expanded={queueOpen} aria-controls="song-menu" onClick={openSongs}><ListMusic size={20} /></IconButton><div className="player-divider" /><IconButton label={volume === 0 ? 'Attiva audio' : 'Disattiva audio'} onClick={() => setVolume(volume === 0 ? 0.7 : 0)}>{volume === 0 ? <VolumeX size={19} /> : <Volume2 size={19} />}</IconButton><Slider aria-label="Volume" min={0} max={1} step={0.01} value={[volume]} onValueChange={v => setVolume(v[0])} className="volume-slider" /></div></div>
+    <div
+  ref={playerElement}
+  className="player"
+  role="region"
+  aria-label="Lettore musicale"
+><div className="now-playing"><Artwork track={current} /><div className="now-playing-text"><strong>{current?.title || 'La tua prossima traccia'}</strong><span>{current?.artist || 'Scegli un brano e mettiti comodo.'}</span></div>{current && <IconButton className="player-heart" label={current.liked ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'} active={current.liked} onClick={() => void patch(current.id, t => ({ ...t, liked: !t.liked }))}><Heart size={19} fill={current.liked ? 'currentColor' : 'none'} /></IconButton>}</div><button type="button" className="player-song-menu" aria-label="Apri menu canzoni" aria-haspopup="dialog" aria-expanded={queueOpen} aria-controls="song-menu" onClick={openSongs}><ListMusic size={20} /><span>Canzoni</span></button><div className="player-center">{playbackControls()}<PlaybackProgress currentId={currentId} duration={duration} onSeek={seek} /></div><div className="player-extras"><IconButton label="Apri menu canzoni" active={queueOpen} aria-haspopup="dialog" aria-expanded={queueOpen} aria-controls="song-menu" onClick={openSongs}><ListMusic size={20} /></IconButton><div className="player-divider" /><IconButton label={volume === 0 ? 'Attiva audio' : 'Disattiva audio'} onClick={() => setVolume(volume === 0 ? 0.7 : 0)}>{volume === 0 ? <VolumeX size={19} /> : <Volume2 size={19} />}</IconButton><Slider aria-label="Volume" min={0} max={1} step={0.01} value={[volume]} onValueChange={v => setVolume(v[0])} className="volume-slider" /></div></div>
 
     <Toaster theme="dark" position="top-right" richColors closeButton />
-    <Dialog open={createOpen} onOpenChange={open => { if (!saving) setCreateOpen(open); }}>
-      <DialogContent className="onda-dialog">
-        <DialogHeader><DialogTitle>Una nuova playlist</DialogTitle>
-          <DialogDescription>Scegli un nome e i generi delle canzoni che hai caricato.</DialogDescription>
+    <Dialog
+      open={createOpen}
+      onOpenChange={open => {
+        if (!saving) setCreateOpen(open);
+      }}
+    >
+      <DialogContent className="onda-dialog playlist-dialog">
+        <DialogHeader>
+          <DialogTitle>Nuova playlist</DialogTitle>
+          <DialogDescription>
+            Scegli il nome e i generi da includere.
+          </DialogDescription>
         </DialogHeader>
+
         <form onSubmit={createPlaylist} className="dialog-form">
-          <label>Nome della playlist<Input autoFocus placeholder="La mia playlist" value={playlistName} maxLength={70}
-            onChange={e => setPlaylistName(e.target.value)} required disabled={saving} /></label>
-          <fieldset className="playlist-genre-field" disabled={saving} aria-describedby="playlist-genre-help">
-            <legend>I tuoi generi</legend>
-            <p id="playlist-genre-help" className="playlist-genre-help">Questi generi provengono dalle canzoni della tua libreria. Puoi selezionarne più di uno.</p>
-            {genreOptions.length ? <div className="playlist-genre-list">
-              {genreOptions.map(genre => <label key={genre.key} className="playlist-genre-option">
-                <Checkbox checked={selectedGenres.includes(genre.key)} disabled={saving}
-                  onCheckedChange={checked => setSelectedGenres(old => checked === true ? [...new Set([...old, genre.key])] : old.filter(key => key !== genre.key))} />
-                <span>{genre.label}</span><small>{genre.count} {genre.count === 1 ? 'brano' : 'brani'}</small>
-              </label>)}
-            </div> : <p className="playlist-genre-help">{!ready ? 'Caricamento dei generi…' : loadError ? 'Impossibile leggere i generi. Riprova a caricare la libreria.' : tracks.length ? 'I brani non hanno un genere. Puoi aggiungerlo dalle informazioni del brano.' : 'Importa dei brani per trovare qui i loro generi.'}</p>}
-          </fieldset>
-          {addTo && <p className="playlist-genre-help">Il brano “{addTo.title}” sarà incluso nella playlist.</p>}
-          <p className="playlist-genre-summary" role="status" aria-live="polite">
-            {newPlaylistTrackIds.length ? `${newPlaylistTrackIds.length} ${newPlaylistTrackIds.length === 1 ? 'brano verrà aggiunto' : 'brani verranno aggiunti'}.` : selectedGenres.length ? 'Nessun brano disponibile per i generi selezionati.' : 'Senza generi selezionati, la playlist sarà vuota.'}
-          </p>
-          <button className="button primary" disabled={!playlistName.trim() || saving || !ready || !!loadError || (selectedGenres.length > 0 && newPlaylistTrackIds.length === 0)}>
-            {saving ? 'Salvataggio…' : 'Crea playlist'}
-          </button>
+          <div className="playlist-form-body">
+            <label>
+              Nome della playlist
+              <Input
+                autoFocus
+                placeholder="La mia playlist"
+                value={playlistName}
+                maxLength={70}
+                onChange={e => setPlaylistName(e.target.value)}
+                required
+                disabled={saving}
+              />
+            </label>
+
+            <fieldset
+              className="playlist-genre-field"
+              disabled={saving}
+              aria-describedby="playlist-genre-help"
+            >
+              <legend>I tuoi generi</legend>
+
+              <p id="playlist-genre-help" className="playlist-genre-help">
+                Puoi selezionare più generi.
+              </p>
+
+              {genreOptions.length ? (
+                <div className="playlist-genre-list">
+                  {genreOptions.map(genre => (
+                    <label key={genre.key} className="playlist-genre-option">
+                      <Checkbox
+                        checked={selectedGenres.includes(genre.key)}
+                        disabled={saving}
+                        onCheckedChange={checked =>
+                          setSelectedGenres(old =>
+                            checked === true
+                              ? [...new Set([...old, genre.key])]
+                              : old.filter(key => key !== genre.key),
+                          )
+                        }
+                      />
+
+                      <span>{genre.label}</span>
+
+                      <small>
+                        {genre.count} {genre.count === 1 ? 'brano' : 'brani'}
+                      </small>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="playlist-genre-help">
+                  {!ready
+                    ? 'Caricamento dei generi…'
+                    : loadError
+                      ? 'Impossibile leggere i generi. Riprova a caricare la libreria.'
+                      : tracks.length
+                        ? 'Aggiungi un genere dalle informazioni del brano.'
+                        : 'Importa dei brani per trovare qui i loro generi.'}
+                </p>
+              )}
+            </fieldset>
+
+            {addTo && (
+              <p className="playlist-genre-help">
+                Il brano “{addTo.title}” sarà incluso nella playlist.
+              </p>
+            )}
+          </div>
+
+          <div className="playlist-form-footer">
+            <p
+              className="playlist-genre-summary"
+              role="status"
+              aria-live="polite"
+            >
+              {newPlaylistTrackIds.length
+                ? `${newPlaylistTrackIds.length} ${
+                    newPlaylistTrackIds.length === 1
+                      ? 'brano verrà aggiunto'
+                      : 'brani verranno aggiunti'
+                  }.`
+                : selectedGenres.length
+                  ? 'Nessun brano disponibile per i generi selezionati.'
+                  : 'Senza generi selezionati, la playlist sarà vuota.'}
+            </p>
+
+            <button
+              className="button primary"
+              disabled={
+                !playlistName.trim() ||
+                saving ||
+                !ready ||
+                !!loadError ||
+                (selectedGenres.length > 0 && newPlaylistTrackIds.length === 0)
+              }
+            >
+              {saving ? 'Salvataggio…' : 'Crea playlist'}
+            </button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

@@ -22,3 +22,256 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
 .playlist-genre-option small { color: var(--muted-foreground); font-size: .875rem; }
 .playlist-genre-option:has([data-state=checked]) { background: #26351d; }
 .playlist-genre-summary { color: var(--primary); font-size: .9375rem; line-height: 1.5; }
+/* Spazio riservato al player */
+.app-main {
+  padding-bottom: calc(var(--onda-player-height, 160px) + 16px);
+}
+
+.app-sidebar[data-slot="sidebar-container"] {
+  bottom: var(--onda-player-height, 108px);
+}
+
+/* Nuova playlist: contenuto scorrevole e conferma separata */
+.playlist-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+}
+
+.playlist-dialog > [data-slot="dialog-header"] {
+  flex-shrink: 0;
+  padding-right: 32px;
+}
+
+.playlist-dialog .dialog-form {
+  flex: 1;
+  min-height: 0;
+  margin-top: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.playlist-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 8px;
+  padding-right: 4px;
+}
+
+.playlist-form-body > * {
+  flex-shrink: 0;
+}
+
+.playlist-dialog .playlist-genre-list {
+  max-height: none;
+  overflow: visible;
+  margin-top: 10px;
+  border-radius: 12px;
+}
+
+.playlist-form-footer {
+  flex-shrink: 0;
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.playlist-form-footer .playlist-genre-summary {
+  margin: 0;
+  font-size: .875rem;
+  line-height: 1.45;
+}
+
+.playlist-form-footer .button {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+}
+
+/* Layout dei telefoni */
+@media (max-width: 767px) {
+  .page-content { padding: 20px 14px 24px; }
+  .topbar { min-height: 64px; padding: 8px 12px; }
+  .topbar-left { gap: 8px; min-width: 0; }
+  .topbar-right { gap: 4px; flex-shrink: 0; }
+
+  .page-heading { gap: 12px; margin-bottom: 20px; }
+  h1 { font-size: clamp(1.5rem, 6vw, 1.85rem); }
+  .page-subtitle { line-height: 1.5; }
+  .section-heading { flex-wrap: wrap; gap: 10px; }
+
+  .button,
+  .button.small,
+  .demo-strip .button,
+  .text-button,
+  .device-button {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .icon-button,
+  .track-actions .icon-button,
+  .recommendation-title .icon-button,
+  .playback-controls .icon-button {
+    width: 44px;
+    height: 44px;
+    touch-action: manipulation;
+  }
+
+  .playback-controls .main-play { width: 48px; height: 48px; }
+  .import-top { min-width: 44px; min-height: 44px; }
+  .device-button { min-width: 44px; }
+
+  .library-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .search-field {
+    min-width: 0;
+    max-width: none;
+    min-height: 44px;
+  }
+
+  .search-field input { min-width: 0; font-size: 1rem; }
+  .sort-select, .discovery-select { min-height: 44px; }
+  .sort-select { width: 100%; }
+  .mix-settings { gap: 8px; }
+
+  .track-table { width: 100%; min-width: 0; }
+  .track-table td { padding-block: 8px; }
+  .track-table .number-cell { width: 44px; }
+  .row-play { width: 44px; height: 44px; }
+  .track-table .actions-cell { width: 88px; padding-inline: 0; }
+  .track-identity { gap: 8px; }
+  .track-identity > button { min-height: 44px; }
+  .track-identity .artwork { display: flex; width: 36px; height: 36px; }
+
+  .recommendation-grid { gap: 18px 12px; }
+  .cover-play { width: 44px; height: 44px; }
+  .daily-mix { margin: 20px 0; padding: 16px; }
+  .daily-mix .button { width: 100%; }
+  .import-zone { min-height: 300px; padding: 24px 16px; }
+  .import-title { font-size: 1.8rem; }
+  .import-buttons { padding-inline: 0; }
+
+  .player {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(44px, auto) 48px 28px;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    gap: 2px 10px;
+  }
+
+  .now-playing { gap: 8px; }
+  .now-playing > .artwork { width: 36px; height: 36px; }
+  .now-playing-text { flex: 1; }
+  .now-playing-text strong, .now-playing-text span { max-width: none; }
+  .now-playing-text span { margin-top: 3px; }
+  .player-song-menu { padding-inline: 10px; }
+  .player .playback-controls { gap: clamp(6px, 3vw, 18px); }
+  .player .progress-row { gap: 8px; }
+  .player .progress-row [data-slot="slider"] { min-height: 28px; }
+  .player [data-slot="slider-thumb"] { width: 16px; height: 16px; }
+
+  .queue-sheet { padding-inline: 12px; }
+  .queue-list { padding-inline: 0; }
+  .queue-track { gap: 10px; min-height: 60px; }
+  .collection-footer { overflow-wrap: anywhere; }
+}
+
+/* Finestre adattate allo spazio disponibile */
+@media (max-width: 767px), (max-height: 500px) {
+  .onda-dialog {
+    top: auto;
+    bottom: 10px;
+    left: 50%;
+    width: calc(100% - 20px);
+    max-width: 560px;
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+    translate: -50% 0;
+    transform: none;
+    padding: 18px;
+    gap: 14px;
+    border-radius: 20px;
+    animation: none;
+    overscroll-behavior: contain;
+  }
+
+  .onda-dialog [data-slot="dialog-header"],
+  .onda-dialog [data-slot="alert-dialog-header"] {
+    text-align: left;
+    padding-right: 40px;
+    gap: 6px;
+  }
+
+  .onda-dialog [data-slot="dialog-title"],
+  .onda-dialog [data-slot="alert-dialog-title"] {
+    font-size: 1.2rem;
+  }
+
+  .onda-dialog [data-slot="dialog-description"],
+  .onda-dialog [data-slot="alert-dialog-description"] {
+    line-height: 1.45;
+  }
+
+  .onda-dialog [data-slot="dialog-close"] {
+    top: 8px;
+    right: 8px;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+  }
+
+  .dialog-form { gap: 14px; }
+  .dialog-form label { gap: 6px; }
+  .dialog-form input { min-height: 44px; font-size: 1rem; }
+  .playlist-genre-help { margin-block: 6px; line-height: 1.45; }
+
+  .dialog-form .playlist-genre-option {
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    min-height: 48px;
+    gap: 10px;
+    padding: 10px 12px;
+    touch-action: manipulation;
+  }
+
+  .playlist-genre-option [role="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+
+  .playlist-genre-option small {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (max-width: 359px) {
+  .page-content { padding-inline: 10px; }
+  .track-identity .artwork { display: none; }
+}
+
+@media (max-height: 500px) {
+  .onda-dialog { padding: 14px; gap: 10px; }
+  .playlist-form-body { gap: 10px; }
+  .playlist-form-footer { margin-top: 8px; padding-top: 8px; gap: 6px; }
+}
+
+/* Con pochissimo spazio, tutta la finestra resta scorrevole */
+@media (max-height: 360px) {
+  .playlist-dialog { overflow-y: auto; }
+  .playlist-dialog .dialog-form { flex: none; overflow: visible; }
+  .playlist-form-body { overflow: visible; }
+}
