@@ -4,16 +4,13 @@ import {
   playlistGenres,
   playlistTrackIds,
 } from '../mobile/playlist-genres.ts';
-const source = readFileSync(new URL('../mobile/playlist-genres.ts', import.meta.url), 'utf8');
-const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ES2020 } }).outputText;
-const { playlistGenres, playlistTrackIds } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 
 test('I generi ignorano maiuscole e spazi senza inventare categorie per i brani non classificati', () => {
   const tracks = [{ id: 'a', genre: ' Rock ' }, { id: 'b', genre: 'ROCK' },
     { id: 'c', genre: 'Alternative   Metal' }, { id: 'd', genre: null }, { id: 'e', genre: '' }, { id: 'f' }];
   assert.deepEqual(playlistGenres(tracks), [
-    { key: 'alternative metal', label: 'Alternative Metal', count: 1 },
     { key: 'rock', label: 'Rock', count: 2 },
+    { key: 'alternative metal', label: 'Alternative Metal', count: 1 },
   ]);
   assert.deepEqual(playlistTrackIds(tracks, ['rock']), ['a', 'b']);
   assert.deepEqual(playlistTrackIds(tracks, ['Alternative Metal']), ['c']);

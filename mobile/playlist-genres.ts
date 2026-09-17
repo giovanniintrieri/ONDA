@@ -33,10 +33,12 @@ export function playlistGenres(
     }
   }
 
-  return [...groups.values()].sort((a, b) =>
-    a.label.localeCompare(b.label, 'it-IT', {
-      sensitivity: 'base',
-    }),
+  return [...groups.values()].sort(
+    (a, b) =>
+      b.count - a.count ||
+      a.label.localeCompare(b.label, 'it-IT', {
+        sensitivity: 'base',
+      }),
   );
 }
 

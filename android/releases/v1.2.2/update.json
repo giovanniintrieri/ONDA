@@ -1,0 +1,9 @@
+{
+  "applicationId": "it.onda.player",
+  "versionCode": 5,
+  "versionName": "1.2.2",
+  "minSdk": 26,
+  "sizeBytes": 6148470,
+  "sha256": "965a96b025210023e62cd832c1a75ba598e1da209d97a496fd161c9467240f62",
+  "apkUrl": "https://github.com/giovanniintrieri/ONDA/releases/download/v1.2.2/onda.apk"
+}
