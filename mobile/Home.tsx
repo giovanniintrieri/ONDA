@@ -323,7 +323,22 @@ export default function Home() {
   }
   const visibleTracks = useMemo(() => view === 'favorites' ? tracks.filter(t => t.liked) : playlist ? playlist.trackIds.map(id => tracks.find(t => t.id === id)).filter((t): t is Track => !!t) : view === 'home' ? [...tracks].sort((a, b) => b.addedAt - a.addedAt).slice(0, 5) : tracks, [tracks, view, playlist]);
   const columns = useMemo<ColumnDef<Track>[]>(() => [{ accessorKey: 'title' }, { accessorKey: 'artist' }, { accessorKey: 'album' }, { accessorKey: 'genre' }, { accessorKey: 'addedAt' }, { accessorKey: 'duration' }], []);
-  const table = useReactTable({ data: visibleTracks, columns, state: { globalFilter: search, sorting: playlist ? [] : sorting }, onSortingChange: setSorting, onGlobalFilterChange: setSearch, getCoreRowModel: getCoreRowModel(), getFilteredRowModel: getFilteredRowModel(), getSortedRowModel: getSortedRowModel(), globalFilterFn: (row, _column, value: string) => `${row.original.title} ${row.original.artist} ${row.original.album} ${row.original.genre}`.toLocaleLowerCase('it').includes(value.toLocaleLowerCase('it')) });
+  const table = useReactTable({
+  data: visibleTracks,
+  columns,
+  state: { globalFilter: search, sorting },
+  manualSorting: !!playlist,
+  autoResetPageIndex: false,
+  onSortingChange: setSorting,
+  onGlobalFilterChange: setSearch,
+  getCoreRowModel: getCoreRowModel(),
+  getFilteredRowModel: getFilteredRowModel(),
+  getSortedRowModel: getSortedRowModel(),
+  globalFilterFn: (row, _column, value: string) =>
+    `${row.original.title} ${row.original.artist} ${row.original.album} ${row.original.genre}`
+      .toLocaleLowerCase('it')
+      .includes(value.toLocaleLowerCase('it')),
+});
   const displayed = table.getRowModel().rows.map(r => r.original);
   const title = view === 'algorithm' ? 'Il tuo algoritmo.' : view === 'home' ? 'La tua musica, oggi.' : view === 'library' ? 'La tua libreria' : view === 'favorites' ? 'I tuoi preferiti' : playlist?.name || 'La tua libreria';
   const pickFiles = () => { void pickNative(false); }, pickFolder = () => { void pickNative(true); };
