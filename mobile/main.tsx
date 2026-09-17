@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import Home from './Home';
 import '../app/globals.css';
 import './native.css';
+import './native.css';
+import './mobile-player.css';
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: string }> {
   state = { error: '' };
   static getDerivedStateFromError(error: Error) { return { error: error.message }; }

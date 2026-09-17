@@ -63,11 +63,33 @@ public final class MainActivity extends ComponentActivity {
         super.onCreate(saved);store=LibraryStore.get(this);importer=new AudioImporter(this);
         updates=AppUpdates.get(this);
         WindowCompat.setDecorFitsSystemWindows(getWindow(),false);
-        web=new WebView(this);web.setBackgroundColor(android.graphics.Color.rgb(20,22,21));setContentView(web);
-        ViewCompat.setOnApplyWindowInsetsListener(web,(view,insets)->{
-            androidx.core.graphics.Insets bars=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.displayCutout()|WindowInsetsCompat.Type.ime());
-            view.setPadding(bars.left,bars.top,bars.right,bars.bottom);return insets;
-        });
+android.widget.FrameLayout content =
+    new android.widget.FrameLayout(this);
+content.setBackgroundColor(android.graphics.Color.rgb(20, 22, 21));
+
+web = new WebView(this);
+web.setBackgroundColor(android.graphics.Color.rgb(20, 22, 21));
+
+content.addView(web, new android.widget.FrameLayout.LayoutParams(
+    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+));
+setContentView(content);
+
+ViewCompat.setOnApplyWindowInsetsListener(content, (view, insets) -> {
+    int handled = WindowInsetsCompat.Type.systemBars()
+        | WindowInsetsCompat.Type.displayCutout()
+        | WindowInsetsCompat.Type.ime();
+
+    androidx.core.graphics.Insets safe = insets.getInsets(handled);
+    view.setPadding(safe.left, safe.top, safe.right, safe.bottom);
+
+    return new WindowInsetsCompat.Builder(insets)
+        .setInsets(handled, androidx.core.graphics.Insets.NONE)
+        .build();
+});
+
+ViewCompat.requestApplyInsets(content);
         web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);
         web.getSettings().setAllowFileAccess(false);web.getSettings().setAllowContentAccess(false);
         web.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);

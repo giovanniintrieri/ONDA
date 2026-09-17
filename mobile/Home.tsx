@@ -21,7 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable, type ColumnDef, type SortingState } from '@tanstack/react-table';
 import { coverColor, editTrack, formatSize, formatTime, importTrack, isAudio, loadLibrary, removePlaylist, removeTrack, savePlaylist, type Playlist, type Track } from '@/lib/music';
 import { demoTags, makeDemo } from '@/lib/demo';
-
+import { MobilePlayer } from './MobilePlayer';
 import { DEFAULT_SETTINGS, nextQueuedTrack, playbackOrder, randomSeed, selectTracks, validateAlgorithm, type ListeningSettings, type Selection } from '@/lib/algorithm';
 import { loadSetting, saveSetting } from '@/lib/music';
 import { AlgorithmEditor } from '@/components/algorithm-editor';
@@ -417,6 +417,32 @@ disabled={!tracks.length} onClick={togglePlay}>{playerLoading ? <Loader2 size={2
   role="region"
   aria-label="Lettore musicale"
 ><div className="now-playing"><Artwork track={current} /><div className="now-playing-text"><strong>{current?.title || 'La tua prossima traccia'}</strong><span>{current?.artist || 'Scegli un brano e mettiti comodo.'}</span></div>{current && <IconButton className="player-heart" label={current.liked ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'} active={current.liked} onClick={() => void patch(current.id, t => ({ ...t, liked: !t.liked }))}><Heart size={19} fill={current.liked ? 'currentColor' : 'none'} /></IconButton>}</div><button type="button" className="player-song-menu" aria-label="Apri menu canzoni" aria-haspopup="dialog" aria-expanded={queueOpen} aria-controls="song-menu" onClick={openSongs}><ListMusic size={20} /><span>Canzoni</span></button><div className="player-center">{playbackControls()}<PlaybackProgress currentId={currentId} duration={duration} onSeek={seek} /></div><div className="player-extras"><IconButton label="Apri menu canzoni" active={queueOpen} aria-haspopup="dialog" aria-expanded={queueOpen} aria-controls="song-menu" onClick={openSongs}><ListMusic size={20} /></IconButton><div className="player-divider" /><IconButton label={volume === 0 ? 'Attiva audio' : 'Disattiva audio'} onClick={() => setVolume(volume === 0 ? 0.7 : 0)}>{volume === 0 ? <VolumeX size={19} /> : <Volume2 size={19} />}</IconButton><Slider aria-label="Volume" min={0} max={1} step={0.01} value={[volume]} onValueChange={v => setVolume(v[0])} className="volume-slider" /></div></div>
+
+<MobilePlayer
+  current={current}
+  playing={playing}
+  loading={playerLoading}
+  duration={duration}
+  volume={volume}
+  view={view}
+  artwork={<Artwork track={current} />}
+  largeArtwork={<Artwork track={current} large />}
+  controls={playbackControls()}
+  onNavigate={go}
+  onTogglePlay={togglePlay}
+  onToggleLike={() => {
+    if (current) {
+      void patch(current.id, t => ({ ...t, liked: !t.liked }));
+    }
+  }}
+  onSeek={seek}
+  onVolumeChange={setVolume}
+  onOpenQueue={opener => {
+    songMenuOpener.current = opener;
+    setSongMenuLimit(60);
+    setQueueOpen(true);
+  }}
+/>
 
     <Toaster theme="dark" position="top-right" richColors closeButton />
     <Dialog

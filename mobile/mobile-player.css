@@ -1,0 +1,391 @@
+.onda-mobile-dock,
+.onda-mobile-dock:empty {
+  display: none;
+}
+
+.onda-touch-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+}
+
+.onda-touch-button[aria-pressed="true"] {
+  color: var(--primary);
+}
+
+@media (max-width: 1023px) {
+  .player { display: none; }
+
+  .app-main {
+    padding-bottom: calc(var(--onda-mobile-dock-height, 136px) + 20px);
+  }
+
+  html {
+    scroll-padding-bottom:
+      calc(var(--onda-mobile-dock-height, 136px) + 20px);
+  }
+
+  .onda-mobile-dock {
+    display: grid;
+    gap: 4px;
+    position: fixed;
+    z-index: 35;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 6px max(8px, env(safe-area-inset-right, 0px))
+      max(4px, env(safe-area-inset-bottom, 0px))
+      max(8px, env(safe-area-inset-left, 0px));
+    background: linear-gradient(transparent, #101510 16px);
+  }
+
+  .onda-mini-player {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px 44px;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 4px 7px;
+    background: #2b3827;
+    border: 1px solid #43523a;
+    border-radius: 12px;
+  }
+
+  .onda-mini-track {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 2px;
+    text-align: left;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+  }
+
+  .onda-mini-track > .artwork {
+    width: 44px;
+    height: 44px;
+  }
+
+  .onda-mini-text { min-width: 0; }
+
+  .onda-mini-text strong,
+  .onda-mini-text > span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.4;
+  }
+
+  .onda-mini-text strong {
+    font-size: .875rem;
+    color: #f2f3ec;
+  }
+
+  .onda-mini-text > span {
+    font-size: .75rem;
+    color: #c0c9b8;
+  }
+
+  .onda-mini-play { color: #f2f3ec; }
+
+  .onda-mini-progress {
+    position: absolute;
+    bottom: 0;
+    left: 10px;
+    right: 10px;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: #5a6550;
+    pointer-events: none;
+  }
+
+  .onda-mini-progress > span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    transform-origin: left;
+    background: #d7f96b;
+  }
+
+  .onda-bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .onda-bottom-nav button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    min-height: 56px;
+    padding: 6px 2px;
+    font-size: .6875rem;
+    line-height: 1.3;
+    color: #a8b39f;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    overflow-wrap: anywhere;
+  }
+
+  .onda-bottom-nav button[aria-current="page"],
+  .onda-bottom-nav button[aria-expanded="true"] {
+    color: #d7f96b;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .topbar-left,
+  .topbar-right { min-width: 0; }
+
+  .topbar-right {
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .topbar .mobile-menu,
+  .topbar .device-button,
+  .topbar .import-top {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .topbar .breadcrumb { flex-wrap: wrap; }
+
+  .page-content {
+    padding-inline: clamp(12px, 4vw, 28px);
+  }
+
+  .recommendation-grid {
+    grid-template-columns:
+      repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  }
+
+  .mix-settings {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .mix-settings .discovery-select { min-width: 0; }
+
+  .track-table {
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .track-table .number-cell { width: 52px; }
+  .track-table .actions-cell { width: 96px; }
+  .track-table .duration-cell { display: none; }
+
+  .track-table .row-play,
+  .track-actions .icon-button {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .drop-overlay {
+    inset: 12px 12px
+      calc(var(--onda-mobile-dock-height, 136px) + 12px);
+  }
+
+  .app-sidebar[data-slot="sidebar-container"] {
+    bottom: var(--onda-mobile-dock-height, 0px);
+    padding-bottom: 0;
+  }
+}
+
+.onda-now-playing-dialog[data-slot="dialog-content"] {
+  position: fixed;
+  inset: 0;
+  translate: none;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+  padding: env(safe-area-inset-top, 0px)
+    env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  animation: none;
+  background: linear-gradient(160deg, #35462a, #141b13 72%);
+  color: #f2f3ec;
+}
+
+.onda-player-heading {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.onda-player-heading [data-slot="dialog-title"] {
+  font-size: .875rem;
+  text-align: center;
+}
+
+.onda-player-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  grid-template-columns: minmax(0, 480px);
+  justify-content: center;
+  align-content: start;
+  gap: clamp(16px, 3vh, 32px);
+  padding: clamp(14px, 4vw, 32px);
+}
+
+.onda-player-cover {
+  width: min(100%, 44vh);
+  width: min(100%, 44dvh);
+  max-width: 400px;
+  margin: auto;
+}
+
+.onda-player-cover > .large-art {
+  width: 100%;
+  height: auto;
+  max-height: none;
+  aspect-ratio: 1;
+}
+
+.onda-player-cover .art-initial {
+  font-size: clamp(4rem, 18vw, 11rem);
+}
+
+.onda-player-panel {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  max-width: 480px;
+  margin: auto;
+}
+
+.onda-player-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.onda-player-track > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.onda-player-track h2 {
+  font-size: clamp(1.25rem, 4vw, 1.875rem);
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.onda-player-track p {
+  margin-top: 6px;
+  font-size: .9375rem;
+  line-height: 1.4;
+  color: #b9c6af;
+}
+
+.onda-now-playing-dialog .playback-controls {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.onda-now-playing-dialog .playback-controls .icon-button {
+  width: 44px;
+  height: 44px;
+}
+
+.onda-now-playing-dialog .playback-controls .main-play {
+  width: 64px;
+  height: 64px;
+  background: #d7f96b;
+}
+
+.onda-now-playing-dialog [data-slot="slider"] {
+  min-width: 0;
+  min-height: 44px;
+  flex: 1;
+}
+
+.onda-now-playing-dialog [data-slot="slider-track"] {
+  height: 4px;
+  background: #59694c;
+}
+
+.onda-now-playing-dialog [data-slot="slider-range"] {
+  background: #d7f96b;
+}
+
+.onda-now-playing-dialog [data-slot="slider-thumb"] {
+  width: 16px;
+  height: 16px;
+  opacity: 1;
+}
+
+.onda-player-volume {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.onda-player-queue {
+  min-height: 44px;
+  white-space: normal;
+}
+
+@media (min-width: 600px) and (max-height: 600px),
+       (min-width: 1024px) {
+  .onda-player-body {
+    grid-template-columns: minmax(0, 400px) minmax(0, 480px);
+    align-items: center;
+  }
+
+  .onda-player-cover {
+    width: min(100%, calc(100vh - 110px));
+    width: min(100%, calc(100dvh - 110px));
+  }
+
+  .onda-player-panel { gap: 8px; }
+}
+
+@media (max-height: 500px) {
+  .onda-bottom-nav button {
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-height: 44px;
+  }
+}
