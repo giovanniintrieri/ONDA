@@ -1,4 +1,5 @@
 import type { Track } from './music';
+import { genreKey, splitGenres } from './genres.js';
 
 export const FEATURES = {
   preferito: { label: 'È un preferito', description: '1 se hai messo un cuore, altrimenti 0.' },
@@ -130,21 +131,63 @@ export const formulaFromRules = (rules: Rule[]) => rules.length ? rules.map(r =>
 const key = (value: string) => value.trim().toLocaleLowerCase('it');
 const feedback = (t: Track) => (t.liked ? 4 : 0) + Math.min(t.plays, 10) - Math.min(t.skips, 5);
 function contextFor(tracks: Track[]) {
-  const artists = new Map<string, number>(), genres = new Map<string, number>();
+  const artists = new Map<string, number>();
+  const genres = new Map<string, number>();
+
   for (const t of tracks) {
-    if (t.artist !== 'Artista sconosciuto' && t.artist.trim()) artists.set(key(t.artist), (artists.get(key(t.artist)) || 0) + feedback(t));
-    if (t.genre.trim()) genres.set(key(t.genre), (genres.get(key(t.genre)) || 0) + feedback(t));
+    if (t.artist !== 'Artista sconosciuto' && t.artist.trim()) {
+      const artist = key(t.artist);
+      artists.set(artist, (artists.get(artist) || 0) + feedback(t));
+    }
+
+    for (const label of splitGenres(t.genre)) {
+      const genre = genreKey(label);
+      genres.set(genre, (genres.get(genre) || 0) + feedback(t));
+    }
   }
+
   return { artists, genres };
 }
-function variables(t: Track, context: ReturnType<typeof contextFor>, rng: () => number, now: number): Variables {
-  const affinity = (map: Map<string, number>, name: string) => Math.max(0, Math.min(1, ((map.get(key(name)) || 0) - feedback(t)) / 10));
+
+function variables(
+  t: Track,
+  context: ReturnType<typeof contextFor>,
+  rng: () => number,
+  now: number,
+): Variables {
+  const affinity = (map: Map<string, number>, name: string) =>
+    Math.max(
+      0,
+      Math.min(1, ((map.get(key(name)) || 0) - feedback(t)) / 10),
+    );
+
+  const genres = splitGenres(t.genre);
+
+  const genreAffinity = genres.length
+    ? genres.reduce(
+        (sum, genre) => sum + affinity(context.genres, genreKey(genre)),
+        0,
+      ) / genres.length
+    : 0;
+
   return {
-    preferito: t.liked ? 1 : 0, artista: t.artist !== 'Artista sconosciuto' && t.artist.trim() ? affinity(context.artists, t.artist) : 0,
-    genere: t.genre.trim() ? affinity(context.genres, t.genre) : 0, nuovo: t.plays === 0 ? 1 : 0,
-    recente: t.lastPlayed ? 1 / (1 + Math.max(0, now - t.lastPlayed) / 86400000) : 0,
-    ascolti: t.plays, salti: t.skips, giorni: t.lastPlayed ? Math.min(365, Math.max(0, (now - t.lastPlayed) / 86400000)) : 365,
-    durata: t.duration, casuale: rng(),
+    preferito: t.liked ? 1 : 0,
+    artista:
+      t.artist !== 'Artista sconosciuto' && t.artist.trim()
+        ? affinity(context.artists, t.artist)
+        : 0,
+    genere: genreAffinity,
+    nuovo: t.plays === 0 ? 1 : 0,
+    recente: t.lastPlayed
+      ? 1 / (1 + Math.max(0, now - t.lastPlayed) / 86400000)
+      : 0,
+    ascolti: t.plays,
+    salti: t.skips,
+    giorni: t.lastPlayed
+      ? Math.min(365, Math.max(0, (now - t.lastPlayed) / 86400000))
+      : 365,
+    durata: t.duration,
+    casuale: rng(),
   };
 }
 export function selectTracks(tracks: Track[], settings: ListeningSettings, seed = 1, now = Date.now()): Selection[] {

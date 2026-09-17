@@ -77,7 +77,8 @@ export async function importTrack(file: File, overrides: Partial<Track> = {}): P
     const { common, format } = await parseBlob(file, { duration: false });
     if (!format.container) throw new Error('Formato audio non riconosciuto.');
     track.title = common.title || track.title; track.artist = common.artist || track.artist;
-    track.album = common.album || ''; track.genre = common.genre?.[0] || '';
+    track.album = common.album || '';
+track.genre = common.genre?.join('; ') || '';
     track.duration = Number.isFinite(format.duration) ? format.duration! : 0;
     const picture = common.picture?.find(p => /image\/(jpeg|png|webp)/.test(p.format) && p.data.length <= 3_000_000);
     if (picture) track.cover = new Blob([new Uint8Array(picture.data)], { type: picture.format });
