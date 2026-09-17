@@ -13,5 +13,11 @@ export default defineConfig({
     { find: '@/components/playback-progress', replacement: path('./mobile/playback-progress.tsx') },
     { find: '@', replacement: path('./') },
   ] },
-  build: { outDir: path('./android/app/src/main/assets/ui'), emptyOutDir: true, target: 'es2020', sourcemap: false },
+  build: {
+    outDir: path('./android/app/src/main/assets/ui'),
+    emptyOutDir: true,
+    target: 'es2020',
+    cssTarget: 'chrome111',
+    sourcemap: false,
+  },
 });

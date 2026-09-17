@@ -215,6 +215,8 @@
 }
 
 .onda-now-playing-dialog[data-slot="dialog-content"] {
+  --tw-translate-x: 0px;
+  --tw-translate-y: 0px;
   position: fixed;
   inset: 0;
   translate: none;

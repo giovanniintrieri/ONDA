@@ -63,18 +63,21 @@ function Brand() { return <div className="brand"><AudioLines size={33} strokeWid
 function Navigation({ view, go, playlists, counts, onCreate, bytes, onInfo }: { view: View; go: (v: View) => void; playlists: Playlist[]; counts: number[]; onCreate: () => void; bytes: number; onInfo: () => void }) {
   const { setOpenMobile } = useSidebar();
   function nav(v: View) { go(v); setOpenMobile(false); }
+  function openCreate() { setOpenMobile(false); onCreate(); }
+  function openInfo() { setOpenMobile(false); onInfo(); }
   return <Sidebar className="app-sidebar"><SidebarHeader className="brand-area"><Brand /><span className="local-label">LOCAL MUSIC PLAYER</span></SidebarHeader><SidebarContent>
     <SidebarMenu className="primary-nav">
       {([{ id: 'home', label: 'Per te', icon: Sparkles }, { id: 'library', label: 'La tua libreria', icon: Library, count: counts[0] }, { id: 'favorites', label: 'Preferiti', icon: Heart, count: counts[1] }, { id: 'algorithm', label: 'Il tuo algoritmo', icon: SlidersHorizontal }] as const).map(item => <SidebarMenuItem key={item.id}><SidebarMenuButton isActive={view === item.id} onClick={() => nav(item.id)} className="nav-item"><item.icon /><span>{item.label}</span>{'count' in item && <small>{item.count}</small>}</SidebarMenuButton></SidebarMenuItem>)}
     </SidebarMenu>
-    <div className="playlist-heading"><span>LE TUE PLAYLIST</span><IconButton label="Crea playlist" onClick={onCreate}><Plus size={18} /></IconButton></div>
+    <div className="playlist-heading"><span>LE TUE PLAYLIST</span><IconButton label="Crea playlist" onClick={openCreate}><Plus size={18} /></IconButton></div>
     <SidebarMenu className="playlist-nav">{playlists.map(p => <SidebarMenuItem key={p.id}><SidebarMenuButton className="nav-item" isActive={view === p.id} onClick={() => nav(p.id)}><ListMusic /><span>{p.name}</span><small>{p.trackIds.length}</small></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu>
-    {!playlists.length && <button className="create-playlist-hint" onClick={onCreate}><span className="dashed-icon"><Plus size={18} /></span>Un posto per ogni mood</button>}
-  </SidebarContent><SidebarFooter className="sidebar-footer"><button onClick={onInfo} className="device-info"><HardDrive size={20} /><span>Solo su questo dispositivo<small>{counts[0]} brani · {formatSize(bytes)}</small></span></button><div className="sidebar-bottom"><span>La musica resta tua.</span><Headphones size={16} /></div></SidebarFooter></Sidebar>;
+    {!playlists.length && <button className="create-playlist-hint" onClick={openCreate}><span className="dashed-icon"><Plus size={18} /></span>Un posto per ogni mood</button>}
+  </SidebarContent><SidebarFooter className="sidebar-footer"><button onClick={openInfo} className="device-info"><HardDrive size={20} /><span>Solo su questo dispositivo<small>{counts[0]} brani · {formatSize(bytes)}</small></span></button><div className="sidebar-bottom"><span>La musica resta tua.</span><Headphones size={16} /></div></SidebarFooter></Sidebar>;
 }
 
 export default function Home() {
-    const playerElement = useRef<HTMLDivElement>(null);
+  const playerElement = useRef<HTMLDivElement>(null);
+  const playlistTitleRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     const element = playerElement.current;
@@ -451,9 +454,17 @@ disabled={!tracks.length} onClick={togglePlay}>{playerLoading ? <Loader2 size={2
         if (!saving) setCreateOpen(open);
       }}
     >
-      <DialogContent className="onda-dialog playlist-dialog">
+      <DialogContent
+        className="onda-dialog playlist-dialog"
+        onOpenAutoFocus={event => {
+          event.preventDefault();
+          playlistTitleRef.current?.focus({ preventScroll: true });
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>Nuova playlist</DialogTitle>
+          <DialogTitle ref={playlistTitleRef} tabIndex={-1}>
+            Nuova playlist
+          </DialogTitle>
           <DialogDescription>
             Scegli il nome e i generi da includere.
           </DialogDescription>
@@ -464,7 +475,6 @@ disabled={!tracks.length} onClick={togglePlay}>{playerLoading ? <Loader2 size={2
             <label>
               Nome della playlist
               <Input
-                autoFocus
                 placeholder="La mia playlist"
                 value={playlistName}
                 maxLength={70}

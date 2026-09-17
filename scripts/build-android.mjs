@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { createWriteStream } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,9 +68,7 @@ try {
     if (actual.toLowerCase() !== expected.toLowerCase()) throw new Error('Verifica del download Gradle fallita.');
     renameSync(archive + '.part', archive);
     if (windows) {
-      const extract = join(tools, 'extract-gradle.ps1');
-      writeFileSync(extract, 'param([string]$Archive,[string]$Destination)\nExpand-Archive -LiteralPath $Archive -DestinationPath $Destination -Force\n');
-      run('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', extract, '-Archive', archive, '-Destination', tools]);
+      run('tar.exe', ['-xf', archive, '-C', tools]);
     } else run('unzip', ['-q', '-o', archive, '-d', tools]);
   }
   if (windows) {
