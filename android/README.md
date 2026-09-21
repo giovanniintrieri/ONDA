@@ -2,11 +2,15 @@
 
 Progetto Android con interfaccia React inclusa nell’APK e riproduzione nativa Media3/ExoPlayer. Non apre il sito e non richiede Firefox, Chrome, un server acceso o un certificato HTTPS locale.
 
+Versione preparata: **1.2.5 (8)**. Novità e procedura di pubblicazione in [RELEASE-1.2.5.md](RELEASE-1.2.5.md).
+
 ## Aggiornamenti dall’app
 
 La variante Android include ora controllo delle nuove versioni, download e avvio dell’installazione. Prima di utilizzarli configura il repository di distribuzione e compila il primo APK: procedura completa in [UPDATES.md](UPDATES.md). La riproduzione resta offline. La rete serve per gli aggiornamenti e, su richiesta, per scaricare nuova musica.
 
 ## Scarica musica
+
+Dal menu **Cerca musica** puoi cercare brani su Last.fm per titolo, artista o entrambi, scegliere un artista e sfogliare i suoi brani, recuperare il collegamento YouTube quando disponibile e avviare il download. Usa la chiave Last.fm già configurata sul telefono. Dettagli e limiti in [SEARCH.md](SEARCH.md).
 
 Dal menu **Scarica musica** puoi aggiungere un video o una playlist YouTube alla libreria come MP3. Download, conversione e importazione avvengono sul telefono, anche mentre usi altre schermate. Last.fm è facoltativo e si configura nella stessa schermata. Dettagli, limiti e prove in [DOWNLOADS.md](DOWNLOADS.md).
 

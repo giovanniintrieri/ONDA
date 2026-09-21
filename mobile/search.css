@@ -1,0 +1,19 @@
+.music-search input[type=search],.music-search input[type=text]{display:block;box-sizing:border-box;width:100%;min-width:0;border:1px solid #59634c;border-radius:9px;background:#121510;color:#f0f3e9;padding:13px;font-size:16px;margin-bottom:16px}
+.search-optional{font-weight:400;color:#b4bda7;font-size:13px;margin-left:6px}
+.search-notice{border-top:1px solid #363d2e;margin-top:18px;padding-top:6px}
+.search-intro{display:grid;justify-items:center;text-align:center;gap:12px;color:#b4bda7;padding:20px;line-height:1.6}
+.search-results{list-style:none;margin:0;padding:0}
+.search-result{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:15px 0;border-top:1px solid #363d2e;min-height:72px;cursor:pointer}
+.search-result:focus-visible{outline:2px solid #d4ff61;outline-offset:3px;border-radius:8px}
+.search-result[aria-pressed=true]{color:#d4ff61}
+.search-result:disabled{cursor:wait;opacity:.65}
+.search-note{display:grid;place-items:center;flex:0 0 44px;height:44px;border-radius:10px;background:#30392a;color:#d4ff61}
+.search-track{display:grid;gap:4px;min-width:0;flex:1;overflow-wrap:anywhere}
+.search-track>span{color:#b4bda7;font-size:14px}
+.search-result>svg{flex-shrink:0}
+.search-selection h2{font-size:22px;font-weight:600;overflow-wrap:anywhere}
+.search-selection .eyebrow{color:#d4ff61;margin-top:0}
+.search-selection{border-color:#64733d}
+.search-links,.search-pagination{margin-top:18px}
+.search-video{font-size:13px}
+.music-search .download-heading h2{overflow-wrap:anywhere}
