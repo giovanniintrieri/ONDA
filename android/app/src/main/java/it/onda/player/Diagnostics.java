@@ -13,7 +13,7 @@ import java.util.*;
 public final class Diagnostics {
     private Diagnostics() {}
     public static synchronized void record(Context context, String operation, Throwable error) {
-        record(context, operation, error.getClass().getSimpleName());
+        record(context, operation, error instanceof FfmpegRuntime.Failure ? ((FfmpegRuntime.Failure)error).diagnostic : error.getClass().getSimpleName());
     }
     public static synchronized void record(Context context, String operation, String code) {
         try {
@@ -31,6 +31,8 @@ public final class Diagnostics {
         text.append("Versione: ").append(BuildConfig.VERSION_NAME).append(" (").append(BuildConfig.VERSION_CODE).append(")\n");
         text.append("Dispositivo: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n');
         text.append("Android: ").append(Build.VERSION.RELEASE).append(" / API ").append(Build.VERSION.SDK_INT).append('\n');
+        text.append("Architetture: ").append(String.join(", ",Build.SUPPORTED_ABIS)).append('\n');
+        text.append("Pagina memoria: ").append(android.system.Os.sysconf(android.system.OsConstants._SC_PAGESIZE)).append(" byte\n");
         android.content.pm.PackageInfo webview = WebView.getCurrentWebViewPackage();
         text.append("WebView: ").append(webview==null ? "non disponibile" : webview.versionName).append('\n');
         text.append("Spazio disponibile: ").append(context.getFilesDir().getUsableSpace()/1_048_576).append(" MiB\n");

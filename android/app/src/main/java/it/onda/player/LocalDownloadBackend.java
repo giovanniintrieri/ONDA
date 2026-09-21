@@ -21,6 +21,8 @@ public final class LocalDownloadBackend implements DownloadBackend {
         if (context.getFilesDir().getUsableSpace() < 600L*1024*1024) throw new IOException("Libera almeno 600 MB prima di scaricare");
         YoutubeDL.getInstance().init(context); cancellation.check();
         FFmpeg.getInstance().init(context); cancellation.check();
+        // Fail before downloading a whole playlist when the native converter cannot start.
+        runFfmpeg(Arrays.asList(ffmpegExecutable(),"-hide_banner","-version"),null,0,cancellation,null,15);
         // yt-dlp updates its own zip from the official stable channel; failure leaves the bundled engine usable.
         android.content.SharedPreferences prefs=context.getSharedPreferences("download-engine",Context.MODE_PRIVATE);
         if (System.currentTimeMillis()-prefs.getLong("checked",0)>86_400_000L) {
@@ -116,32 +118,41 @@ public final class LocalDownloadBackend implements DownloadBackend {
         return new JSONObject(value);
     }
     private void encode(File input, File output, JSONObject tags, double duration, Cancellation cancellation, Progress progress) throws Exception {
-        List<String> args=new ArrayList<>(Arrays.asList(new File(context.getApplicationInfo().nativeLibraryDir,"libffmpeg.so").getAbsolutePath(),
+        List<String> args=new ArrayList<>(Arrays.asList(ffmpegExecutable(),
             "-nostdin","-hide_banner","-loglevel","error","-y","-i",input.getAbsolutePath(),"-map","0:a:0","-vn","-map_metadata","-1","-map_chapters","-1",
             "-c:a","libmp3lame","-b:a","192k","-id3v2_version","3","-write_id3v1","0"));
         for(String field:Arrays.asList("title","artist","album","genre")) {args.add("-metadata");args.add(field+"="+tags.optString(field));}
         args.addAll(Arrays.asList("-progress","pipe:1",output.getAbsolutePath()));
+        runFfmpeg(args,output,duration,cancellation,progress,20*60);
+    }
+    private String ffmpegExecutable() {return new File(context.getApplicationInfo().nativeLibraryDir,"libffmpeg.so").getAbsolutePath();}
+    private void runFfmpeg(List<String> args, File output, double duration, Cancellation cancellation, Progress progress, int timeoutSeconds) throws Exception {
+        cancellation.check();
         ProcessBuilder builder=new ProcessBuilder(args).redirectErrorStream(true);
-        builder.environment().put("LD_LIBRARY_PATH",new File(context.getNoBackupFilesDir(),"youtubedl-android/packages/ffmpeg/usr/lib").getAbsolutePath());
-        builder.environment().put("TMPDIR",context.getCacheDir().getAbsolutePath());
-        Process process=builder.start();
+        FfmpegRuntime.configure(builder,context.getNoBackupFilesDir(),context.getCacheDir());
+        Process process;
+        try {process=builder.start();}
+        catch(IOException e) {throw new FfmpegRuntime.Failure("Impossibile avviare il convertitore MP3","FFMPEG_START_FAILED",true);}
+        FfmpegRuntime.Errors errors=new FfmpegRuntime.Errors();
         ScheduledExecutorService monitor=Executors.newSingleThreadScheduledExecutor();
         AtomicReference<String> failure=new AtomicReference<>();
-        long deadline=System.nanoTime()+TimeUnit.MINUTES.toNanos(20);
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(timeoutSeconds);
         monitor.scheduleWithFixedDelay(()->{
             if(cancellation.cancelled()) failure.compareAndSet(null,"Download annullato");
             else if(System.nanoTime()>deadline) failure.compareAndSet(null,"Conversione troppo lunga. Riprova");
-            else if(output.length()>DownloadRules.MAX_BYTES||output.getParentFile().getUsableSpace()<100L*1024*1024) failure.compareAndSet(null,"Spazio sul telefono insufficiente");
+            else if(output!=null&&(output.length()>DownloadRules.MAX_BYTES||output.getParentFile().getUsableSpace()<100L*1024*1024)) failure.compareAndSet(null,"Spazio sul telefono insufficiente");
             if(failure.get()!=null) process.destroyForcibly();
         },0,500,TimeUnit.MILLISECONDS);
         try(BufferedReader reader=new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
-            while((line=reader.readLine())!=null) if(line.startsWith("out_time_us=")) {
-                try {progress.update("converting",Math.min(100,(int)(Long.parseLong(line.substring(12))/10000.0/duration)));}catch(NumberFormatException ignored){}
+            while((line=reader.readLine())!=null) {
+                if(progress!=null&&duration>0&&line.startsWith("out_time_us=")) {
+                    try {progress.update("converting",Math.min(100,(int)(Long.parseLong(line.substring(12))/10000.0/duration)));}catch(NumberFormatException ignored){}
+                }else errors.accept(line);
             }
             int exit=process.waitFor(); cancellation.check();
             if(failure.get()!=null) throw new IOException(failure.get());
-            if(exit!=0) throw new IOException("Conversione MP3 non riuscita");
+            if(exit!=0) throw errors.failure(exit,output==null);
         } finally { monitor.shutdownNow(); if(process.isAlive()) process.destroyForcibly(); }
     }
 }

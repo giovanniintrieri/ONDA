@@ -43,3 +43,15 @@ I test JVM verificano URL, limiti dei nomi, annullamento, selezione dei brani da
 Prima di una release, provare su un telefono un breve video disponibile e una piccola playlist: importazione automatica, metadati MP3, ascolto, download a schermo spento, annullamento durante download/conversione, riapertura dopo arresto, recupero dopo perdita di rete e spazio insufficiente. Verificare anche il caso senza notifiche autorizzate e senza chiave Last.fm. I video privati, rimossi o soggetti a restrizioni di YouTube possono non essere disponibili.
 
 La versione resta **1.2.3 (6)**. Questa modifica non pubblica una release.
+
+## Correzione dell'avvio FFmpeg
+
+FFmpeg deve vedere **entrambe** le cartelle `packages/python/usr/lib` e `packages/ffmpeg/usr/lib`, nell'ordine usato dal wrapper yt-dlp. Alcune dipendenze native del convertitore, tra cui `libc++_shared.so`, `libcrypto.so.3` e `libexpat.so.1`, sono distribuite nel pacchetto Python. Cercarle nella sola cartella FFmpeg impediva l'avvio del processo e produceva «Conversione MP3 non riuscita» per ogni brano.
+
+Preparazione e conversione usano ora la stessa configurazione. Un controllo locale `ffmpeg -version`, con timeout di 15 secondi, verifica l'avvio prima della lettura/download della playlist. Un errore globale del motore ferma la coda e lascia riprendibili i brani incompleti. Gli errori relativi al singolo file continuano a permettere il tentativo del brano successivo.
+
+La diagnostica registra codice di uscita FFmpeg e categoria riconosciuta, ad esempio `FFMPEG_EXIT=1;MISSING_LIBRARY:libc++_shared.so`, senza copiare percorsi, URL o testo arbitrario del processo. Include inoltre architetture e dimensione delle pagine di memoria.
+
+L'analisi dei pacchetti 0.18.1 ha trovato tutte le 78 librerie della catena FFmpeg nelle due cartelle. Per le architetture a 64 bit, tre dipendenze WebP (`libwebp`, `libwebpmux`, `libsharpyuv`) sono ancora allineate a 4 KB. Il manifest richiede quindi la [modalità di compatibilità Android per pagine da 16 KB](https://developer.android.com/guide/practices/page-sizes#16kb-backcompat-mode), disponibile nei sistemi recenti come l'emulatore Android 17 segnalato. Questa impostazione non ricompila le librerie: il supporto nativo completo a 16 KB richiederà dipendenze ricompilate. L'esecuzione sul dispositivo resta da verificare.
+
+Test di regressione: ricerca delle dipendenze in entrambe le cartelle, classificazione degli errori del linker/encoder, distinzione tra guasti globali e file non convertibili, esclusione di percorsi e URL dalla diagnostica. Dopo aver installato l'APK ricompilato, usare **Riprendi i brani rimasti** per ritentare la coda esistente.

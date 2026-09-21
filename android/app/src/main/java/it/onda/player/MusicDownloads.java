@@ -131,6 +131,7 @@ public final class MusicDownloads {
                     if(cancellation.cancelled()){entry(item,"pending","");throw e;}
                     Diagnostics.record(context,"download brano",e);
                     entry(item,"failed",e instanceof IOException?e.getMessage():"Brano non disponibile. Puoi riprovare.");
+                    if(e instanceof FfmpegRuntime.Failure&&((FfmpegRuntime.Failure)e).engineFailure)throw e;
                 }finally{delete(directory);}
             }
             synchronized(this){put(state,"stage",cancellation.cancelled()?"cancelled":"done");put(state,"message",cancellation.cancelled()?"Download annullato. I brani già aggiunti restano in libreria.":"Coda terminata");}

@@ -13,6 +13,7 @@
         android:icon="@drawable/ic_onda"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        android:pageSizeCompat="enabled"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
         <activity
