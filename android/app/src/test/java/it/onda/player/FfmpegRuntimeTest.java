@@ -8,10 +8,10 @@ public class FfmpegRuntimeTest {
     @Test public void conversionCanResolveLibrariesInBothPackagesInUpstreamOrder() {
         ProcessBuilder process=new ProcessBuilder("ffmpeg");
         process.environment().put("LD_LIBRARY_PATH","/unrelated/host/libraries");
-        File root=new File("private/no_backup"),cache=new File("private/cache");
-        FfmpegRuntime.configure(process,root,cache);
+        File root=new File("private/no_backup"),cache=new File("private/cache"),installed=new File("installed/lib/x86_64");
+        FfmpegRuntime.configure(process,installed,root,cache);
         String[] paths=process.environment().get("LD_LIBRARY_PATH").split(java.util.regex.Pattern.quote(File.pathSeparator));
-        assertArrayEquals(new String[]{new File(root,"youtubedl-android/packages/python/usr/lib").getAbsolutePath(),
+        assertArrayEquals(new String[]{installed.getAbsolutePath(),new File(root,"youtubedl-android/packages/python/usr/lib").getAbsolutePath(),
             new File(root,"youtubedl-android/packages/ffmpeg/usr/lib").getAbsolutePath()},paths);
         assertEquals(cache.getAbsolutePath(),process.environment().get("TMPDIR"));
     }
@@ -52,6 +52,18 @@ public class FfmpegRuntimeTest {
             FfmpegRuntime.Errors errors=new FfmpegRuntime.Errors();errors.accept(line);
             assertTrue(line,errors.failure(1,false).engineFailure);
         }
+    }
+    @Test public void alignmentErrorNamesTheActualLibraryWithoutItsPrivatePath() {
+        FfmpegRuntime.Errors errors=new FfmpegRuntime.Errors();
+        errors.accept("CANNOT LINK EXECUTABLE \"/data/app/libffmpeg.so\": \"/private/packages/ffmpeg/usr/lib/libwebp.so\" program alignment (4096) cannot be smaller than system page size (16384)");
+        assertEquals("FFMPEG_EXIT=1;PAGE_ALIGNMENT:libwebp.so:4096<16384",errors.failure(1,true).diagnostic);
+        assertFalse(errors.failure(1,true).getMessage().contains("/private"));
+    }
+    @Test public void genericFirstLineDoesNotHideAUsefulLinkerDetail() {
+        FfmpegRuntime.Errors errors=new FfmpegRuntime.Errors();
+        errors.accept("CANNOT LINK EXECUTABLE");
+        errors.accept("library \"libcrypto.so.3\" not found");
+        assertEquals("FFMPEG_EXIT=1;MISSING_LIBRARY:libcrypto.so.3",errors.failure(1,true).diagnostic);
     }
     @Test public void nativeCrashStopsTheQueueEvenWithoutStderr() {
         FfmpegRuntime.Failure failure=new FfmpegRuntime.Errors().failure(139,false);

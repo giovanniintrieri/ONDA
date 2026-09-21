@@ -1,0 +1,32 @@
+{
+  "source": "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz",
+  "sourceSha256": "e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564",
+  "ndk": "28.2.13676358",
+  "androidApi": 26,
+  "libraries": {
+    "app/src/main/jniLibs/x86_64/libwebp.so": {
+      "sha256": "d63149b6cd8c9c8066260c31bf1a0c14a60a0eadf8c0180020d2d2413fa400e3",
+      "size": 542872
+    },
+    "app/src/main/jniLibs/x86_64/libwebpmux.so": {
+      "sha256": "9d1a9af78e340ab811f21ffcbca0f39e8c175c3ab347e8571d89482fc3bb557b",
+      "size": 39480
+    },
+    "app/src/main/jniLibs/x86_64/libsharpyuv.so": {
+      "sha256": "560c7842149be275fdaafeca3df208f351d6a91b2af39a5243b439efd9f0af89",
+      "size": 22368
+    },
+    "app/src/main/jniLibs/arm64-v8a/libwebp.so": {
+      "sha256": "b41c0415ee87437d46f626414a09ce2138e681febaa50f3d295cd629e9caf834",
+      "size": 419392
+    },
+    "app/src/main/jniLibs/arm64-v8a/libwebpmux.so": {
+      "sha256": "1a88d351ca36e8d8e8bdb300295f62c1b468a8d689243f682a46f6a65fda13fb",
+      "size": 38512
+    },
+    "app/src/main/jniLibs/arm64-v8a/libsharpyuv.so": {
+      "sha256": "8666a244b3a4e28d9e113fd54335e73173600b8b9b1dbf9a1d8d447c1de24683",
+      "size": 17784
+    }
+  }
+}

@@ -129,7 +129,7 @@ public final class LocalDownloadBackend implements DownloadBackend {
     private void runFfmpeg(List<String> args, File output, double duration, Cancellation cancellation, Progress progress, int timeoutSeconds) throws Exception {
         cancellation.check();
         ProcessBuilder builder=new ProcessBuilder(args).redirectErrorStream(true);
-        FfmpegRuntime.configure(builder,context.getNoBackupFilesDir(),context.getCacheDir());
+        FfmpegRuntime.configure(builder,new File(context.getApplicationInfo().nativeLibraryDir),context.getNoBackupFilesDir(),context.getCacheDir());
         Process process;
         try {process=builder.start();}
         catch(IOException e) {throw new FfmpegRuntime.Failure("Impossibile avviare il convertitore MP3","FFMPEG_START_FAILED",true);}

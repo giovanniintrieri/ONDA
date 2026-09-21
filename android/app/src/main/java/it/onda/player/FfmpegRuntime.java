@@ -9,11 +9,13 @@ import java.util.regex.Pattern;
 /** Shared by the startup check and conversion; independent of Android for regression tests. */
 final class FfmpegRuntime {
     private FfmpegRuntime() {}
-    static void configure(ProcessBuilder process, File noBackupDirectory, File cacheDirectory) {
+    static void configure(ProcessBuilder process, File nativeLibraryDirectory, File noBackupDirectory, File cacheDirectory) {
         File packages = new File(noBackupDirectory, "youtubedl-android/packages");
         // FFmpeg also links libraries shipped in the Python package (C++, crypto, expat, ...).
-        // Match YoutubeDL's search order so common SONAMEs resolve to the same versions.
-        process.environment().put("LD_LIBRARY_PATH", new File(packages,"python/usr/lib").getAbsolutePath()
+        // The APK supplies rebuilt 16 KB WebP libraries. Prefer them to the older copies
+        // in the extracted FFmpeg archive; keep the wrapper's order for the remaining libraries.
+        process.environment().put("LD_LIBRARY_PATH", nativeLibraryDirectory.getAbsolutePath()
+            + File.pathSeparator + new File(packages,"python/usr/lib").getAbsolutePath()
             + File.pathSeparator + new File(packages,"ffmpeg/usr/lib").getAbsolutePath());
         process.environment().put("TMPDIR", cacheDirectory.getAbsolutePath());
     }
@@ -27,13 +29,19 @@ final class FfmpegRuntime {
     /** Keep only recognized categories, never upstream URLs, paths, titles or arbitrary stderr. */
     static final class Errors {
         private static final Pattern MISSING_LIBRARY = Pattern.compile("library [\"']([A-Za-z0-9_+.-]{1,120}\\.so(?:\\.[0-9]+)*)[\"'] not found",Pattern.CASE_INSENSITIVE);
+        private static final Pattern PAGE_ALIGNMENT = Pattern.compile("[\"']([^\"']{1,512})[\"'] program alignment \\(([0-9]{1,8})\\) cannot be smaller than system page size \\(([0-9]{1,8})\\)",Pattern.CASE_INSENSITIVE);
         private String code="PROCESS_FAILED", message="Conversione MP3 non riuscita";
         private boolean engine;
         void accept(String line) {
-            if(engine)return;
+            if(engine&&!code.equals("NATIVE_LINK_ERROR"))return;
             String lower=line.toLowerCase(Locale.ROOT);
-            Matcher missing=MISSING_LIBRARY.matcher(line);
-            if(missing.find()) {
+            Matcher missing=MISSING_LIBRARY.matcher(line), alignment=PAGE_ALIGNMENT.matcher(line);
+            if(alignment.find()) {
+                String library=new File(alignment.group(1)).getName();
+                if(!library.matches("lib[A-Za-z0-9_+.-]{1,120}\\.so(?:\\.[0-9]+)*"))library="native-library";
+                code="PAGE_ALIGNMENT:"+library+":"+alignment.group(2)+"<"+alignment.group(3);
+                message="La libreria "+library+" non supporta le pagine di memoria del dispositivo";engine=true;
+            }else if(missing.find()) {
                 code="MISSING_LIBRARY:"+missing.group(1);message="Motore MP3 non disponibile: manca "+missing.group(1);engine=true;
             }else if(lower.contains("cannot locate symbol")) {
                 code="MISSING_SYMBOL";message="Le librerie del convertitore MP3 non sono compatibili";engine=true;
