@@ -154,10 +154,10 @@ ViewCompat.requestApplyInsets(content);
         if(isDestroyed())return;
         if(Arrays.asList("state","setQueue","select","play","pause","next","previous","seek","repeat","shuffle","volume","enqueue","removeTrack","editTrack","mergeTracks").contains(method)&&controller==null){awaitingController.add(()->dispatch(id,method,p));return;}
         try{
-            if("searchLastFm".equals(method)||"resolveLastFmTrack".equals(method)){
+            if("searchLastFm".equals(method)||"searchLastFmArtistTracks".equals(method)||"resolveLastFmTrack".equals(method)){
                 if(!searching.compareAndSet(false,true))throw new IllegalStateException("Attendi la ricerca in corso e riprova");
                 searchIo.execute(()->{
-                    try{reply(id,"searchLastFm".equals(method)?musicSearch.search(p.optString("title"),p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):musicSearch.resolve(p.optString("url")),null);}
+                    try{reply(id,"searchLastFm".equals(method)?musicSearch.search(p.optString("title"),p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):"searchLastFmArtistTracks".equals(method)?musicSearch.artistTracks(p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):musicSearch.resolve(p.optString("url")),null);}
                     catch(Exception e){reply(id,null,e);}
                     finally{searching.set(false);}
                 });return;

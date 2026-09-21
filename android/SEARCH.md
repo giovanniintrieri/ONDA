@@ -1,6 +1,6 @@
 # Ricerca musica
 
-Dal menu **Cerca musica**, inserire il titolo del brano e, facoltativamente, l'artista. La ricerca usa `track.search` di Last.fm con la chiave già salvata in **Scarica musica → Metadati Last.fm**. La chiave non attraversa il bridge WebView e non è inclusa nel codice o nell'APK.
+Dal menu **Cerca musica**, inserire il titolo del brano, il nome dell'artista oppure entrambi. Con il solo artista, `artist.search` mostra gli artisti corrispondenti; scegliendone uno, `artist.getTopTracks` elenca i suoi brani in ordine di popolarità su Last.fm, con paginazione e ritorno ai risultati degli artisti. La ricerca per titolo usa `track.search` di Last.fm con la chiave già salvata in **Scarica musica → Metadati Last.fm**. La chiave non attraversa il bridge WebView e non è inclusa nel codice o nell'APK.
 
 I risultati sono presentati in pagine da 20. Selezionando un risultato, Onda legge la pagina Last.fm e cerca esclusivamente il collegamento YouTube del comando principale `header-new-playlink`. Non seleziona i video dei brani simili presenti nella stessa pagina. Il download parte solo premendo **Scarica sul telefono**, quindi si apre la schermata della coda esistente. Metadati, conversione e riconoscimento dei duplicati restano gestiti dal motore di download.
 
@@ -12,8 +12,9 @@ Una coda attiva impedisce l'avvio di un altro download ma non la ricerca. Sostit
 
 ## Verifiche
 
-- Test JVM su risultati multipli/singoli/vuoti, paginazione, duplicati, errori API, validazione URL e selezione del solo video principale.
+- Test JVM su risultati multipli/singoli/vuoti di brani e artisti, paginazione dei brani dell’artista, duplicati, errori API, validazione URL e selezione del solo video principale.
 - `tests/android-search-ui.cjs`: ricerca con bridge simulato, configurazione mancante, filtro artista, paginazione, collegamento mancante, apertura browser, coda attiva/interrotta, avvio esplicito del download, errori e larghezze 390/320 px.
+- Controlli dal vivo di `artist.search` e `artist.getTopTracks` con Imagine Dragons: artista trovato e prima pagina di 20 brani ricevuta.
 - Controllo dal vivo di `track.search` con Believer / Imagine Dragons: risposta valida e pagina Last.fm del brano presente. La lettura HTTP della pagina dal nostro ambiente ha ricevuto la verifica automatica del sito: il recupero reale del video sul telefono resta da verificare.
 
 Per la prova sul telefono: configurare la chiave, cercare un brano, selezionarlo e verificare il link o il messaggio di indisponibilità. Provare il passaggio al browser, il ritorno all'app e l'avvio del download. Le verifiche automatiche dell'interfaccia non eseguono la conversione reale.

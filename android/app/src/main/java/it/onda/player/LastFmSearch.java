@@ -15,35 +15,89 @@ public final class LastFmSearch {
 
     public JSONObject search(String title, String artist, int page, String key) throws Exception {
         title = DownloadRules.text(title); artist = DownloadRules.text(artist);
-        if (title.isEmpty()) throw new IOException("Scrivi il titolo del brano da cercare");
+        if (title.isEmpty() && artist.isEmpty()) throw new IOException("Scrivi un titolo o il nome di un artista");
+        boolean artists = title.isEmpty();
+        JSONObject raw = query(artists ? "artist.search" : "track.search", title, artist, page, key);
+        return artists ? artistResults(raw, page) : results(raw, page);
+    }
+
+    public JSONObject artistTracks(String artist, int page, String key) throws Exception {
+        artist = DownloadRules.text(artist);
+        if (artist.isEmpty()) throw new IOException("Scegli un artista");
+        return topTracks(query("artist.getTopTracks", "", artist, page, key), page, artist);
+    }
+
+    private JSONObject query(String method, String title, String artist, int page, String key) throws Exception {
         if (page < 1 || page > 100) throw new IOException("Pagina di ricerca non valida");
         if (!key.matches("[A-Za-z0-9]{32}")) throw new IOException("Configura la chiave Last.fm in Scarica musica");
-        String cacheKey = key + "\n" + title + "\n" + artist + "\n" + page;
+        String cacheKey = method + "\n" + key + "\n" + title + "\n" + artist + "\n" + page;
         if (cache.containsKey(cacheKey)) return new JSONObject(cache.get(cacheKey).toString());
-        String url = "https://ws.audioscrobbler.com/2.0/?method=track.search&format=json&limit=20&page=" + page
-            + "&track=" + encode(title) + "&artist=" + encode(artist) + "&api_key=" + encode(key);
+        String url = "https://ws.audioscrobbler.com/2.0/?method=" + method + "&format=json&autocorrect=0&limit=20&page=" + page
+            + "&artist=" + encode(artist) + "&api_key=" + encode(key);
+        if (method.equals("track.search")) url += "&track=" + encode(title);
         JSONObject raw;
         try { raw = new JSONObject(read(url, true)); }
         catch (JSONException e) { throw new IOException("Risposta Last.fm non valida. Riprova."); }
         if (raw.optInt("error") == 29) retryAfter = System.currentTimeMillis() + 60_000;
-        JSONObject result = results(raw, page);
+        checkError(raw);
         if (cache.size() >= 20) cache.remove(cache.keySet().iterator().next());
-        cache.put(cacheKey, result);
-        return new JSONObject(result.toString());
+        cache.put(cacheKey, raw);
+        return new JSONObject(raw.toString());
+    }
+
+    private static void checkError(JSONObject raw) throws IOException {
+        if (!raw.has("error")) return;
+        int code = raw.optInt("error");
+        throw new IOException(code == 10 || code == 26 ? "Chiave Last.fm non valida o sospesa. Controllala in Scarica musica."
+            : code == 29 ? "Troppe richieste a Last.fm. Attendi un minuto e riprova."
+            : "Last.fm non disponibile. Riprova più tardi.");
+    }
+
+    private static JSONArray array(Object value) {
+        return value instanceof JSONArray ? (JSONArray)value : value instanceof JSONObject ? new JSONArray().put(value) : new JSONArray();
+    }
+
+    static JSONObject artistResults(JSONObject raw, int page) throws Exception {
+        checkError(raw);
+        JSONObject results = raw.optJSONObject("results");
+        if (results == null) throw new IOException("Risposta Last.fm non valida. Riprova.");
+        JSONObject matches = results.optJSONObject("artistmatches");
+        JSONArray input = array(matches == null ? null : matches.opt("artist"));
+        JSONArray artists = new JSONArray(); Set<String> seen = new HashSet<>();
+        for (int i = 0; i < Math.min(input.length(), 20); i++) {
+            JSONObject item = input.optJSONObject(i); if (item == null) continue;
+            String name = DownloadRules.text(item.optString("name"));
+            if (!name.isEmpty() && seen.add(name.toLowerCase(Locale.ROOT))) artists.put(new JSONObject().put("name", name));
+        }
+        return new JSONObject().put("kind", "artists").put("artists", artists).put("tracks", new JSONArray()).put("page", page)
+            .put("hasMore", page < 100 && results.optLong("opensearch:totalResults", 0) > page * 20L);
+    }
+
+    static JSONObject topTracks(JSONObject raw, int page, String artist) throws Exception {
+        checkError(raw);
+        JSONObject top = raw.optJSONObject("toptracks");
+        if (top == null) throw new IOException("Elenco dei brani Last.fm non disponibile. Riprova.");
+        JSONArray input = array(top.opt("track")), tracks = new JSONArray();
+        for (int i = 0; i < Math.min(input.length(), 20); i++) {
+            JSONObject original = input.optJSONObject(i); if (original == null) continue;
+            JSONObject track = new JSONObject(original.toString());
+            JSONObject owner = track.optJSONObject("artist");
+            track.put("artist", owner == null ? artist : owner.optString("name", artist));
+            tracks.put(track);
+        }
+        JSONObject attributes = top.optJSONObject("@attr");
+        long total = attributes == null ? 0 : attributes.optLong("total", 0);
+        return results(new JSONObject().put("results", new JSONObject().put("trackmatches", new JSONObject().put("track", tracks))
+            .put("opensearch:totalResults", total)), page);
     }
 
     static JSONObject results(JSONObject raw, int page) throws Exception {
-        if (raw.has("error")) {
-            int code = raw.optInt("error");
-            throw new IOException(code == 10 || code == 26 ? "Chiave Last.fm non valida o sospesa. Controllala in Scarica musica."
-                : code == 29 ? "Troppe richieste a Last.fm. Attendi un minuto e riprova."
-                : "Last.fm non disponibile. Riprova più tardi.");
-        }
+        checkError(raw);
         JSONObject results = raw.optJSONObject("results");
         if (results == null) throw new IOException("Risposta Last.fm non valida. Riprova.");
         JSONObject matches = results.optJSONObject("trackmatches");
         Object value = matches == null ? null : matches.opt("track");
-        JSONArray input = value instanceof JSONArray ? (JSONArray)value : value instanceof JSONObject ? new JSONArray().put(value) : new JSONArray();
+        JSONArray input = array(value);
         JSONArray tracks = new JSONArray(); Set<String> seen = new HashSet<>();
         for (int i = 0; i < Math.min(input.length(), 20); i++) {
             JSONObject item = input.optJSONObject(i); if (item == null) continue;
@@ -53,7 +107,7 @@ public final class LastFmSearch {
             try { url = trackUrl(item.optString("url")); } catch (IOException e) { continue; }
             if (seen.add(url)) tracks.put(new JSONObject().put("title", name).put("artist", artist).put("url", url));
         }
-        return new JSONObject().put("tracks", tracks).put("page", page)
+        return new JSONObject().put("kind", "tracks").put("tracks", tracks).put("page", page)
             .put("hasMore", page < 100 && results.optLong("opensearch:totalResults", 0) > page * 20L);
     }
 

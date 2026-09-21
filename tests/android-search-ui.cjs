@@ -25,11 +25,15 @@ const fs = require('node:fs'), path = require('node:path');
         else if (method === 'updateState') result = { phase: 'current', installedVersion: '1.2.4' };
         else if (method === 'musicDownloadState') result = window.downloadState;
         else if (method === 'searchLastFm') {
-          if (params.title === 'errore') error = 'Ricerca non riuscita. Controlla la connessione e riprova.';
+          if (!params.title) result = { kind: 'artists', tracks: [], artists: params.artist === 'vuoto' ? [] : [{ name: 'Imagine Dragons' }, { name: 'Imagine Dragons Tribute' }], page: params.page, hasMore: params.page === 1 };
+          else if (params.title === 'errore') error = 'Ricerca non riuscita. Controlla la connessione e riprova.';
           else result = { page: params.page, hasMore: params.page === 1, tracks: params.title === 'vuoto' ? [] : [
             { title: 'Believer', artist: 'Imagine Dragons', url: 'https://www.last.fm/music/Imagine+Dragons/_/Believer' },
             { title: 'Un titolo molto lungo con caratteri speciali: Cariño & musica', artist: 'Artista dal nome molto lungo', url: 'https://www.last.fm/music/Artist/_/Other' },
           ] };
+        } else if (method === 'searchLastFmArtistTracks') {
+          if (window.failArtist) { window.failArtist = false; error = 'Elenco dei brani Last.fm non disponibile. Riprova.'; }
+          else result = { kind: 'tracks', page: params.page, hasMore: params.page === 1, tracks: [{ title: 'Believer', artist: params.artist, url: 'https://www.last.fm/music/Imagine+Dragons/_/Believer' }] };
         } else if (method === 'resolveLastFmTrack') {
           result = params.url.endsWith('/Other') ? { url: '', message: 'Il collegamento YouTube non è disponibile.' } : { url: 'https://www.youtube.com/watch?v=7wtfhZwyrcc', message: 'Collegamento YouTube trovato sulla pagina Last.fm.' };
         } else if (method === 'startMusicDownloads') {
@@ -50,7 +54,7 @@ const fs = require('node:fs'), path = require('node:path');
     await page.getByLabel('Titolo del brano').fill('Believer');
     assert.equal(await page.getByRole('button', { name: 'Cerca brani' }).isDisabled(), true);
     await page.evaluate(() => { window.downloadState = { lastFmConfigured: true }; document.dispatchEvent(new Event('visibilitychange')); });
-    await page.getByLabel('Artista facoltativo').fill('Imagine Dragons');
+    await page.getByLabel('Artista', { exact: true }).fill('Imagine Dragons');
     await page.getByRole('button', { name: 'Cerca brani' }).click();
     await page.getByRole('button', { name: 'Believer Imagine Dragons' }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.calls.findLast(c => c.method === 'searchLastFm').params), { title: 'Believer', artist: 'Imagine Dragons', page: 1 });
@@ -89,7 +93,37 @@ const fs = require('node:fs'), path = require('node:path');
     await page.getByLabel('Titolo del brano').fill('errore');
     await page.getByRole('button', { name: 'Cerca brani' }).click();
     await page.getByRole('alert').filter({ hasText: 'Ricerca non riuscita.' }).waitFor();
+    await page.getByLabel('Titolo del brano').fill('');
+    await page.getByLabel('Artista', { exact: true }).fill('Imagine');
+    await page.getByRole('button', { name: 'Cerca artisti', exact: true }).click();
+    await page.getByRole('button', { name: 'Imagine Dragons Mostra brani', exact: true }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.calls.findLast(c => c.method === 'searchLastFm').params), { title: '', artist: 'Imagine', page: 1 });
+    await page.getByRole('button', { name: 'Successiva' }).click();
+    await page.getByText('2 artisti · pagina 2 · Last.fm', { exact: true }).waitFor();
+    await page.evaluate(() => { window.failArtist = true; });
+    await page.getByRole('button', { name: 'Imagine Dragons Mostra brani', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'Elenco dei brani Last.fm' }).waitFor();
+    await page.getByRole('button', { name: 'Imagine Dragons Mostra brani', exact: true }).click();
+    await page.getByRole('heading', { name: 'Brani di Imagine Dragons', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Successiva' }).click();
+    await page.getByText('1 risultati · pagina 2 · Last.fm', { exact: true }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.calls.findLast(c => c.method === 'searchLastFmArtistTracks').params), { artist: 'Imagine Dragons', page: 2 });
+    await page.getByRole('button', { name: 'Believer Imagine Dragons', exact: true }).click();
+    await page.getByText('Collegamento YouTube trovato sulla pagina Last.fm.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Torna agli artisti' }).click();
+    await page.getByText('2 artisti · pagina 2 · Last.fm', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('region', { name: 'Brano selezionato' }).count(), 0);
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 568 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      if (process.env.ONDA_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.ONDA_SCREENSHOT_DIR}/onda-artists-${width}.png`, fullPage: true });
+    }
+    await page.getByLabel('Artista', { exact: true }).fill('vuoto');
+    await page.getByRole('button', { name: 'Cerca artisti', exact: true }).click();
+    await page.getByText('Nessun artista trovato. Prova un altro nome.', { exact: true }).waitFor();
+    await page.getByLabel('Artista', { exact: true }).fill('');
+    assert.equal(await page.getByRole('button', { name: 'Cerca brani', exact: true }).isDisabled(), true);
     assert.deepEqual(errors, []);
-    console.log('Search UI passed: key setup, search/filter, pagination, missing video, browser link, busy/interrupted queue, explicit download, empty/error states, 390/320px.');
+    console.log('Search UI passed: artist-only search, artist tracks and pagination, return to artist results, empty/error artist states, key setup, search/filter, pagination, missing video, browser link, busy/interrupted queue, explicit download, empty/error states, 390/320px.');
   } finally { await browser.close(); server.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

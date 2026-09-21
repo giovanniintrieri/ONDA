@@ -48,8 +48,50 @@ public class LastFmSearchTest {
     }
     @Test public void invalidInputFailsBeforeNetworkAccess() {
         LastFmSearch search=new LastFmSearch();
-        assertThrows(IOException.class,()->search.search("","Artist",1,"a".repeat(32)));
+        assertThrows(IOException.class,()->search.search("","",1,"a".repeat(32)));
         assertThrows(IOException.class,()->search.search("Song","",0,"a".repeat(32)));
         assertThrows(IOException.class,()->search.search("Song","",1,""));
+        assertThrows(IOException.class,()->search.artistTracks("",1,"a".repeat(32)));
+        assertThrows(IOException.class,()->search.search("","Artist",1,""));
+    }
+    @Test public void artistsAreDeduplicatedAndPaginatedWithoutRequiringATitle() throws Exception {
+        JSONArray input=new JSONArray().put(new JSONObject().put("name","Imagine Dragons"))
+            .put(new JSONObject().put("name","Imagine Dragons")).put(new JSONObject().put("name"," "));
+        JSONObject raw=new JSONObject().put("results",new JSONObject().put("artistmatches",new JSONObject().put("artist",input)).put("opensearch:totalResults","21"));
+        JSONObject result=LastFmSearch.artistResults(raw,1);
+        assertEquals("artists",result.getString("kind"));
+        assertEquals(1,result.getJSONArray("artists").length());
+        assertEquals("Imagine Dragons",result.getJSONArray("artists").getJSONObject(0).getString("name"));
+        assertTrue(result.getBoolean("hasMore"));
+        assertFalse(LastFmSearch.artistResults(raw,2).getBoolean("hasMore"));
+    }
+    @Test public void artistsHandleSingleAndEmptyResponses() throws Exception {
+        JSONObject matches=new JSONObject().put("artist",new JSONObject().put("name","Cher"));
+        JSONObject raw=new JSONObject().put("results",new JSONObject().put("artistmatches",matches));
+        assertEquals(1,LastFmSearch.artistResults(raw,1).getJSONArray("artists").length());
+        matches.put("artist",new JSONArray());
+        assertEquals(0,LastFmSearch.artistResults(raw,1).getJSONArray("artists").length());
+        assertThrows(IOException.class,()->LastFmSearch.artistResults(new JSONObject().put("error",29),1));
+    }
+    @Test public void artistTracksReadNestedArtistAndTotalCount() throws Exception {
+        JSONObject song=track("Believer","https://www.last.fm/music/Imagine+Dragons/_/Believer")
+            .put("artist",new JSONObject().put("name","Imagine Dragons"));
+        JSONObject raw=new JSONObject().put("toptracks",new JSONObject().put("track",new JSONArray().put(song))
+            .put("@attr",new JSONObject().put("total","41")));
+        JSONObject result=LastFmSearch.topTracks(raw,1,"Imagine Dragons");
+        assertEquals("tracks",result.getString("kind"));
+        assertEquals("Imagine Dragons",result.getJSONArray("tracks").getJSONObject(0).getString("artist"));
+        assertTrue(result.getBoolean("hasMore"));
+        assertFalse(LastFmSearch.topTracks(raw,3,"Imagine Dragons").getBoolean("hasMore"));
+        assertTrue(song.get("artist") instanceof JSONObject);
+    }
+    @Test public void artistTracksHandleMissingArtistSingleTrackEmptyAndErrors() throws Exception {
+        JSONObject song=new JSONObject().put("name","Believe").put("url","https://www.last.fm/music/Cher/_/Believe");
+        JSONObject top=new JSONObject().put("track",song), raw=new JSONObject().put("toptracks",top);
+        assertEquals("Cher",LastFmSearch.topTracks(raw,1,"Cher").getJSONArray("tracks").getJSONObject(0).getString("artist"));
+        top.put("track",new JSONArray());
+        assertEquals(0,LastFmSearch.topTracks(raw,1,"Cher").getJSONArray("tracks").length());
+        assertThrows(IOException.class,()->LastFmSearch.topTracks(new JSONObject(),1,"Cher"));
+        assertThrows(IOException.class,()->LastFmSearch.topTracks(new JSONObject().put("error",10),1,"Cher"));
     }
 }
