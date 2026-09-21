@@ -39,6 +39,9 @@ public final class AudioImporter {
         }catch(Exception e){temp.delete();throw e;}
         try{return commit(temp,name,new JSONObject());}finally{temp.delete();}
     }
+    public JSONObject importDownload(File file, String filename, JSONObject metadata) throws Exception {
+        return commit(file,filename,metadata);
+    }
     private JSONObject commit(File temp,String filename,JSONObject overrides) throws Exception {
         if(temp.length()==0)throw new IOException("File audio vuoto");
         MessageDigest digest=MessageDigest.getInstance("SHA-256");

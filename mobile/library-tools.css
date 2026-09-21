@@ -1,0 +1,14 @@
+.auto-playlists { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:20px 0; }
+.auto-playlist-card, .duplicate-group, .duplicate-copy { min-width:0; border:1px solid var(--border); border-radius:14px; padding:16px; background:var(--card); }
+.auto-playlist-card, .duplicate-group { text-align:left; display:flex; flex-direction:column; gap:6px; cursor:pointer; }
+.auto-playlist-card span, .duplicate-group span, .duplicate-copy small { color:var(--muted-foreground); }
+.library-tools-dialog { width:min(620px,calc(100vw - 24px)); max-height:85dvh; display:flex; flex-direction:column; overflow:hidden; }
+.tools-scroll { overflow-y:auto; min-height:0; display:flex; flex-direction:column; gap:12px; }
+.duplicate-copy { display:flex; flex-direction:column; gap:10px; overflow-wrap:anywhere; }
+.duplicate-copy label { display:flex; align-items:center; gap:10px; min-height:44px; cursor:pointer; }
+.duplicate-copy input { width:20px; height:20px; flex-shrink:0; accent-color:var(--primary); }
+.tools-actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.tools-actions .button { flex:1; min-height:44px; }
+.diagnostics-report { min-height:0; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; line-height:1.7; padding:12px; border-radius:10px; background:var(--background); }
+.library-tools-dialog > .button, .library-tools-dialog > .tools-actions { flex-shrink:0; }
+@media(max-width:400px) { .auto-playlists { grid-template-columns:1fr 1fr; gap:8px; } .auto-playlist-card { padding:12px; } }

@@ -39,11 +39,18 @@ public final class MainActivity extends ComponentActivity {
     private AudioImporter importer;
     private LibraryStore store;
     private AppUpdates updates;
+    private MusicDownloads downloads;
+    private long seenDownloadRevision=-1;
+    private final ActivityResultLauncher<String> notificationPermission=registerForActivityResult(new ActivityResultContracts.RequestPermission(),granted->{});
     private final AppUpdates.Listener updateListener = state -> event("appUpdate", state);
     private boolean pageReady=false,visible=false;
-    private long pickerCall=-1;
+    private long pickerCall=-1, seenLibraryRevision=-1;
     private final Runnable progress=new Runnable(){@Override public void run(){
         if(!visible)return;
+        if(downloads!=null&&seenDownloadRevision!=downloads.libraryRevision()){seenDownloadRevision=downloads.libraryRevision();event("libraryChanged",new JSONObject());}
+        if(PlaybackService.instance!=null && seenLibraryRevision!=service().libraryRevision()) {
+            seenLibraryRevision=service().libraryRevision();event("libraryChanged",new JSONObject());
+        }
         try{if(controller!=null)event("progress",new JSONObject().put("position",Math.max(0,controller.getCurrentPosition())/1000.0));}catch(Exception ignored){}
         handler.postDelayed(this,500);
     }};
@@ -61,7 +68,7 @@ public final class MainActivity extends ComponentActivity {
 
     @SuppressLint("SetJavaScriptEnabled") @Override public void onCreate(Bundle saved){
         super.onCreate(saved);store=LibraryStore.get(this);importer=new AudioImporter(this);
-        updates=AppUpdates.get(this);
+        updates=AppUpdates.get(this);downloads=MusicDownloads.get(this);
         WindowCompat.setDecorFitsSystemWindows(getWindow(),false);
 android.widget.FrameLayout content =
     new android.widget.FrameLayout(this);
@@ -122,7 +129,7 @@ ViewCompat.requestApplyInsets(content);
         controllerFuture.addListener(()->{
             try{controller=controllerFuture.get();controller.addListener(new Player.Listener(){@Override public void onEvents(Player player,Player.Events events){sendState();}});
                 List<Runnable> calls=new ArrayList<>(awaitingController);awaitingController.clear();calls.forEach(Runnable::run);sendState();
-            }catch(Exception e){android.util.Log.e("Onda","Collegamento al servizio audio non riuscito",e);}
+            }catch(Exception e){Diagnostics.record(this,"collegamento lettore",e);android.util.Log.e("Onda","Collegamento al servizio audio non riuscito",e);}
         },ContextCompat.getMainExecutor(this));
         web.loadUrl("https://appassets.androidplatform.net/assets/ui/index.html");
     }
@@ -131,7 +138,7 @@ ViewCompat.requestApplyInsets(content);
     private void sendState(){if(controller==null||!pageReady)return;try{event("player",service().snapshot());}catch(Exception e){android.util.Log.w("Onda","Stato audio non disponibile",e);}}
     private void deliver(JSONObject value){handler.post(()->{if(!isDestroyed()&&pageReady)web.evaluateJavascript("window.__ondaReply&&window.__ondaReply("+value.toString()+")",null);});}
     private void event(String name,Object data){try{deliver(new JSONObject().put("event",name).put("data",data));}catch(JSONException ignored){}}
-    private void reply(long id,Object result,Exception error){try{JSONObject value=new JSONObject().put("id",id);if(error!=null)value.put("error",error.getMessage()==null?"Operazione non riuscita":error.getMessage());else value.put("result",result==null?JSONObject.NULL:result);deliver(value);}catch(JSONException ignored){}}
+    private void reply(long id,Object result,Exception error){try{JSONObject value=new JSONObject().put("id",id);if(error!=null){Diagnostics.record(this,"operazione app",error);value.put("error",error.getMessage()==null?"Operazione non riuscita":error.getMessage());}else value.put("result",result==null?JSONObject.NULL:result);deliver(value);}catch(JSONException ignored){}}
     private final class Bridge {
         @JavascriptInterface public void postMessage(String raw){
             if(raw==null||raw.length()>210_000)return;
@@ -142,8 +149,30 @@ ViewCompat.requestApplyInsets(content);
     }
     private void dispatch(long id,String method,JSONObject p){
         if(isDestroyed())return;
-        if(Arrays.asList("state","setQueue","select","play","pause","next","previous","seek","repeat","shuffle","volume","enqueue","removeTrack","editTrack").contains(method)&&controller==null){awaitingController.add(()->dispatch(id,method,p));return;}
+        if(Arrays.asList("state","setQueue","select","play","pause","next","previous","seek","repeat","shuffle","volume","enqueue","removeTrack","editTrack","mergeTracks").contains(method)&&controller==null){awaitingController.add(()->dispatch(id,method,p));return;}
         try{
+            if("musicDownloadState".equals(method)){reply(id,downloads.snapshot(),null);return;}
+            if("configureMusicDownloads".equals(method)){reply(id,downloads.configure(p.optString("key"),p.optBoolean("clear")),null);return;}
+            if("cancelMusicDownloads".equals(method)){downloads.cancel();reply(id,downloads.snapshot(),null);return;}
+            if("startMusicDownloads".equals(method)){
+                if(!visible)throw new IllegalStateException("Apri Onda per avviare il download");
+                JSONObject state=downloads.start(p.optString("url"),p.optBoolean("playlist"),p.optBoolean("resume"));
+                reply(id,state,null);
+                if(Build.VERSION.SDK_INT>=33&&ContextCompat.checkSelfPermission(this,android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS);
+                return;
+            }
+            if("diagnostics".equals(method)) {
+                JSONObject state=PlaybackService.instance==null?null:service().snapshot();
+                reply(id,Diagnostics.report(this,state,p.optString("uiErrors", "")),null);return;
+            }
+            if("copyDiagnostics".equals(method)) {
+                String report=Diagnostics.report(this,PlaybackService.instance==null?null:service().snapshot(),p.optString("uiErrors", ""));
+                ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Diagnostica Onda",report));
+                reply(id,null,null);return;
+            }
+            if("mergeTracks".equals(method)) {
+                JSONObject result=service().mergeTracks(p);sendState();event("libraryChanged",new JSONObject());reply(id,result,null);return;
+            }
             if("updateState".equals(method)){reply(id,updates.snapshot(),null);return;}
             if("checkUpdate".equals(method)){updates.check(true);reply(id,updates.snapshot(),null);return;}
             if("downloadUpdate".equals(method)){updates.download();reply(id,updates.snapshot(),null);return;}
@@ -207,7 +236,7 @@ ViewCompat.requestApplyInsets(content);
             else for(Uri uri:selection){String name=nameOf(uri);if(AudioImporter.isAudio(name,getContentResolver().getType(uri))){uris.add(uri);names.add(name);}}
             for(int i=0;i<uris.size();i++){
                 try{if(importer.importUri(uris.get(i),names.get(i))==null)duplicates++;else added++;}
-                catch(Exception e){failed++;if(firstError.isEmpty())firstError=names.get(i)+": "+e.getMessage();}
+                catch(Exception e){Diagnostics.record(this,"importazione",e);failed++;if(firstError.isEmpty())firstError=names.get(i)+": "+e.getMessage();}
                 event("importProgress",new JSONObject().put("done",i+1).put("total",uris.size()));
             }
             reply(call,new JSONObject().put("added",added).put("duplicates",duplicates).put("failed",failed).put("error",firstError),null);

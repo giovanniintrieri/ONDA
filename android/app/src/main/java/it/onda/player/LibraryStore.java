@@ -9,6 +9,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import java.io.File;
+import java.util.*;
 
 /** One application-owned database; browser storage is never used for music. */
 public final class LibraryStore extends SQLiteOpenHelper {
@@ -56,6 +57,47 @@ public final class LibraryStore extends SQLiteOpenHelper {
             String field=played?"plays":"skips"; t.put(field,t.optInt(field)+1);
             if(played)t.put("lastPlayed",System.currentTimeMillis());put("tracks",id,t);
         } catch(JSONException e) { android.util.Log.e("Onda","Statistiche non salvate",e); }
+    }
+    /** One transaction moves every reference and combines statistics before deleting records. */
+    public synchronized JSONObject mergeTracks(String keepId, Set<String> removed) throws JSONException {
+        if(removed.isEmpty() || removed.contains(keepId)) throw new IllegalArgumentException("Selezione duplicati non valida");
+        JSONObject keep=requireTrack(keepId);
+        double min=keep.optDouble("duration",0), max=min;
+        for(String id:removed) {
+            JSONObject t=requireTrack(id);
+            if(!DuplicateRules.matches(keep.optString("title"),keep.optString("artist"),keep.optDouble("duration",0),t.optString("title"),t.optString("artist"),t.optDouble("duration",0)))
+                throw new IllegalArgumentException("I brani sono cambiati. Riapri la verifica dei duplicati.");
+            min=Math.min(min,t.optDouble("duration"));max=Math.max(max,t.optDouble("duration"));
+            keep.put("plays",keep.optLong("plays")+t.optLong("plays"));
+            keep.put("skips",keep.optLong("skips")+t.optLong("skips"));
+            keep.put("liked",keep.optBoolean("liked")||t.optBoolean("liked"));
+            keep.put("lastPlayed",Math.max(keep.optLong("lastPlayed"),t.optLong("lastPlayed")));
+            keep.put("addedAt",Math.min(keep.optLong("addedAt"),t.optLong("addedAt")));
+        }
+        if(max-min>2) throw new IllegalArgumentException("Le durate dei brani sono troppo diverse");
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try {
+            JSONArray playlists=all("playlists");
+            for(int i=0;i<playlists.length();i++) {
+                JSONObject p=playlists.getJSONObject(i);
+                p.put("trackIds",replaceIds(p.getJSONArray("trackIds"),removed,keepId));put("playlists",p.getString("id"),p);
+            }
+            Object saved=setting("player");
+            if(saved instanceof JSONObject) {
+                JSONObject state=(JSONObject)saved;
+                for(String field:new String[]{"queue","original"}) if(state.has(field)) state.put(field,replaceIds(state.getJSONArray(field),removed,keepId));
+                if(removed.contains(state.optString("currentId"))) state.put("currentId",keepId);
+                setting("player",state);
+            }
+            put("tracks",keepId,keep);
+            for(String id:removed) delete("tracks",id);
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+        return keep;
+    }
+    private static JSONArray replaceIds(JSONArray ids,Set<String> removed,String keep) throws JSONException {
+        List<String> list=new ArrayList<>();for(int i=0;i<ids.length();i++) list.add(ids.getString(i));
+        return new JSONArray(DuplicateRules.replace(list,removed,keep));
     }
     public synchronized void removeTrack(Context context,String id) throws JSONException {
         requireTrack(id);

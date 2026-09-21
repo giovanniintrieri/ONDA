@@ -4,7 +4,11 @@ Progetto Android con interfaccia React inclusa nell’APK e riproduzione nativa 
 
 ## Aggiornamenti dall’app
 
-La variante Android include ora controllo delle nuove versioni, download e avvio dell’installazione. Prima di utilizzarli configura il repository di distribuzione e compila il primo APK: procedura completa in [UPDATES.md](UPDATES.md). La riproduzione resta offline; la rete viene usata solo per cercare o scaricare un aggiornamento.
+La variante Android include ora controllo delle nuove versioni, download e avvio dell’installazione. Prima di utilizzarli configura il repository di distribuzione e compila il primo APK: procedura completa in [UPDATES.md](UPDATES.md). La riproduzione resta offline. La rete serve per gli aggiornamenti e, su richiesta, per scaricare nuova musica.
+
+## Scarica musica
+
+Dal menu **Scarica musica** puoi aggiungere un video o una playlist YouTube alla libreria come MP3. Download, conversione e importazione avvengono sul telefono, anche mentre usi altre schermate. Last.fm è facoltativo e si configura nella stessa schermata. Dettagli, limiti e prove in [DOWNLOADS.md](DOWNLOADS.md).
 
 ## Compilare su Windows
 
@@ -14,7 +18,7 @@ La variante Android include ora controllo delle nuove versioni, download e avvio
 4. Esegui `node scripts/build-android.mjs`.
 5. Il risultato, se la compilazione termina senza errori, è `android/app/build/outputs/apk/debug/app-debug.apk`. Trasferiscilo sul telefono e aprilo per installare Onda. Puoi anche installarlo da Android Studio con il telefono collegato.
 
-Il primo avvio della compilazione richiede internet per Gradle e le dipendenze Android. L’app installata lavora offline. Il comando genera un APK di sviluppo, firmato con la chiave debug locale; per distribuire aggiornamenti definitivi occorre configurare e conservare una chiave release propria.
+Il primo avvio della compilazione richiede internet per Gradle e le dipendenze Android. L’ascolto della libreria installata funziona offline. Il comando genera un APK di sviluppo, firmato con la chiave debug locale; per distribuire aggiornamenti definitivi occorre configurare e conservare una chiave release propria.
 
 Lo script scarica Gradle 8.13 dal sito ufficiale e verifica SHA-256. Non cambia le impostazioni globali di Java o del sistema. Se Java è installato altrove, imposta `JAVA_HOME` sulla sua cartella (JDK 17 o successivo compatibile). Se l’SDK è altrove, imposta `ANDROID_HOME` sulla cartella SDK.
 
