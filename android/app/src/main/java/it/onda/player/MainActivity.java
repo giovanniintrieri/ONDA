@@ -34,6 +34,9 @@ public final class MainActivity extends ComponentActivity {
     private ListenableFuture<MediaController> controllerFuture;
     private MediaController controller;
     private final ExecutorService io=Executors.newSingleThreadExecutor();
+    private final ExecutorService searchIo=Executors.newSingleThreadExecutor();
+    private final LastFmSearch musicSearch=new LastFmSearch();
+    private final java.util.concurrent.atomic.AtomicBoolean searching=new java.util.concurrent.atomic.AtomicBoolean();
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final List<Runnable> awaitingController=new ArrayList<>();
     private AudioImporter importer;
@@ -151,12 +154,26 @@ ViewCompat.requestApplyInsets(content);
         if(isDestroyed())return;
         if(Arrays.asList("state","setQueue","select","play","pause","next","previous","seek","repeat","shuffle","volume","enqueue","removeTrack","editTrack","mergeTracks").contains(method)&&controller==null){awaitingController.add(()->dispatch(id,method,p));return;}
         try{
+            if("searchLastFm".equals(method)||"resolveLastFmTrack".equals(method)){
+                if(!searching.compareAndSet(false,true))throw new IllegalStateException("Attendi la ricerca in corso e riprova");
+                searchIo.execute(()->{
+                    try{reply(id,"searchLastFm".equals(method)?musicSearch.search(p.optString("title"),p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):musicSearch.resolve(p.optString("url")),null);}
+                    catch(Exception e){reply(id,null,e);}
+                    finally{searching.set(false);}
+                });return;
+            }
+            if("openLastFmTrack".equals(method)){
+                if(!visible)throw new IllegalStateException("Apri Onda per visualizzare il brano");
+                try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(LastFmSearch.trackUrl(p.optString("url")))));}
+                catch(ActivityNotFoundException e){throw new IOException("Nessun browser disponibile per aprire Last.fm");}
+                reply(id,null,null);return;
+            }
             if("musicDownloadState".equals(method)){reply(id,downloads.snapshot(),null);return;}
             if("configureMusicDownloads".equals(method)){reply(id,downloads.configure(p.optString("key"),p.optBoolean("clear")),null);return;}
             if("cancelMusicDownloads".equals(method)){downloads.cancel();reply(id,downloads.snapshot(),null);return;}
             if("startMusicDownloads".equals(method)){
                 if(!visible)throw new IllegalStateException("Apri Onda per avviare il download");
-                JSONObject state=downloads.start(p.optString("url"),p.optBoolean("playlist"),p.optBoolean("resume"));
+                JSONObject state=p.optBoolean("fromSearch")?downloads.startFromSearch(p.optString("url"),p.optBoolean("replaceInterrupted")):downloads.start(p.optString("url"),p.optBoolean("playlist"),p.optBoolean("resume"));
                 reply(id,state,null);
                 if(Build.VERSION.SDK_INT>=33&&ContextCompat.checkSelfPermission(this,android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS);
                 return;
@@ -247,6 +264,7 @@ ViewCompat.requestApplyInsets(content);
         if(updates!=null){updates.observe(updateListener);updates.check(false);}}
     @Override protected void onPause(){visible=false;handler.removeCallbacks(progress);if(updates!=null)updates.remove(updateListener);if(web!=null)web.onPause();super.onPause();}
     @Override protected void onDestroy(){visible=false;handler.removeCallbacksAndMessages(null);awaitingController.clear();
+        searchIo.shutdownNow();
         if(updates!=null)updates.remove(updateListener);
         if(controllerFuture!=null)MediaController.releaseFuture(controllerFuture);
         if(web!=null){web.removeJavascriptInterface("OndaAndroid");web.destroy();}

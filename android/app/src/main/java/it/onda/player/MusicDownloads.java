@@ -31,6 +31,7 @@ public final class MusicDownloads {
     }
     private static void put(JSONObject object,String key,Object value) {try{object.put(key,value);}catch(JSONException e){throw new IllegalStateException(e);}}
     public long libraryRevision() {return libraryRevision;}
+    synchronized String lastFmKey() {return preferences.getString("lastFmKey","");}
     public synchronized JSONObject snapshot() {
         try {
             JSONObject copy=new JSONObject(state.toString());
@@ -54,6 +55,10 @@ public final class MusicDownloads {
             preferences.edit().putString("lastFmKey",key).apply();
         }
         return snapshot();
+    }
+    public synchronized JSONObject startFromSearch(String url,boolean replaceInterrupted) throws Exception {
+        if(snapshot().optBoolean("canResume")&&!replaceInterrupted)throw new IllegalStateException("Hai una coda interrotta. Conferma la sostituzione oppure riprendila in Scarica musica.");
+        return start(url,false,false);
     }
     public synchronized JSONObject start(String url,boolean playlist,boolean resume) throws Exception {
         if(state.optBoolean("busy")||running)throw new IllegalStateException("Una coda è già in corso");

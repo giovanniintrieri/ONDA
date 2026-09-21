@@ -1,0 +1,139 @@
+package it.onda.player;
+
+import org.json.*;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
+import java.io.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+
+/** Read-only Last.fm discovery. Never downloads audio or exposes the API key to the UI. */
+public final class LastFmSearch {
+    private long retryAfter;
+    private final Map<String, JSONObject> cache = new LinkedHashMap<>();
+
+    public JSONObject search(String title, String artist, int page, String key) throws Exception {
+        title = DownloadRules.text(title); artist = DownloadRules.text(artist);
+        if (title.isEmpty()) throw new IOException("Scrivi il titolo del brano da cercare");
+        if (page < 1 || page > 100) throw new IOException("Pagina di ricerca non valida");
+        if (!key.matches("[A-Za-z0-9]{32}")) throw new IOException("Configura la chiave Last.fm in Scarica musica");
+        String cacheKey = key + "\n" + title + "\n" + artist + "\n" + page;
+        if (cache.containsKey(cacheKey)) return new JSONObject(cache.get(cacheKey).toString());
+        String url = "https://ws.audioscrobbler.com/2.0/?method=track.search&format=json&limit=20&page=" + page
+            + "&track=" + encode(title) + "&artist=" + encode(artist) + "&api_key=" + encode(key);
+        JSONObject raw;
+        try { raw = new JSONObject(read(url, true)); }
+        catch (JSONException e) { throw new IOException("Risposta Last.fm non valida. Riprova."); }
+        if (raw.optInt("error") == 29) retryAfter = System.currentTimeMillis() + 60_000;
+        JSONObject result = results(raw, page);
+        if (cache.size() >= 20) cache.remove(cache.keySet().iterator().next());
+        cache.put(cacheKey, result);
+        return new JSONObject(result.toString());
+    }
+
+    static JSONObject results(JSONObject raw, int page) throws Exception {
+        if (raw.has("error")) {
+            int code = raw.optInt("error");
+            throw new IOException(code == 10 || code == 26 ? "Chiave Last.fm non valida o sospesa. Controllala in Scarica musica."
+                : code == 29 ? "Troppe richieste a Last.fm. Attendi un minuto e riprova."
+                : "Last.fm non disponibile. Riprova più tardi.");
+        }
+        JSONObject results = raw.optJSONObject("results");
+        if (results == null) throw new IOException("Risposta Last.fm non valida. Riprova.");
+        JSONObject matches = results.optJSONObject("trackmatches");
+        Object value = matches == null ? null : matches.opt("track");
+        JSONArray input = value instanceof JSONArray ? (JSONArray)value : value instanceof JSONObject ? new JSONArray().put(value) : new JSONArray();
+        JSONArray tracks = new JSONArray(); Set<String> seen = new HashSet<>();
+        for (int i = 0; i < Math.min(input.length(), 20); i++) {
+            JSONObject item = input.optJSONObject(i); if (item == null) continue;
+            String name = DownloadRules.text(item.optString("name")), artist = DownloadRules.text(item.optString("artist"));
+            if (name.isEmpty() || artist.isEmpty()) continue;
+            String url;
+            try { url = trackUrl(item.optString("url")); } catch (IOException e) { continue; }
+            if (seen.add(url)) tracks.put(new JSONObject().put("title", name).put("artist", artist).put("url", url));
+        }
+        return new JSONObject().put("tracks", tracks).put("page", page)
+            .put("hasMore", page < 100 && results.optLong("opensearch:totalResults", 0) > page * 20L);
+    }
+
+    /** Only canonical track pages on Last.fm; no arbitrary URLs, ports, credentials or redirects. */
+    static String trackUrl(String value) throws IOException {
+        try {
+            if (value.length() > 2048) throw new Exception();
+            URI uri = new URI(value);
+            if (!("https".equals(uri.getScheme()) || "http".equals(uri.getScheme())) || uri.getUserInfo() != null
+                || uri.getPort() != -1 || !Arrays.asList("www.last.fm", "last.fm").contains(uri.getHost())
+                || uri.getRawQuery() != null || uri.getRawFragment() != null
+                || !uri.getRawPath().matches("/music/[^/]+/_/[^/]+/?")) throw new Exception();
+            // Reject decoded traversal and separators as well as literal path tricks.
+            for (String part : uri.getRawPath().split("/")) {
+                String decoded = URLDecoder.decode(part, "UTF-8");
+                if (decoded.equals(".") || decoded.equals("..") || decoded.contains("\\") || decoded.contains("/") || decoded.matches(".*[\\p{Cntrl}].*")) throw new Exception();
+            }
+            return "https://www.last.fm" + uri.getRawPath();
+        } catch (Exception e) { throw new IOException("Pagina del brano Last.fm non valida"); }
+    }
+
+    static String videoFromPage(String html) throws IOException {
+        // Similar tracks also have YouTube links: only the main track's play control is eligible.
+        for (Element link : Jsoup.parse(html).select("a.header-new-playlink[href]")) {
+            try { return DownloadRules.url(link.attr("href"), false); }
+            catch (IllegalArgumentException ignored) { }
+        }
+        return "";
+    }
+
+    public JSONObject resolve(String url) throws Exception {
+        String page = read(trackUrl(url), false);
+        String video = videoFromPage(page);
+        return new JSONObject().put("url", video).put("message", video.isEmpty()
+            ? "Il collegamento YouTube non è disponibile o Last.fm ne impedisce la lettura. Apri la pagina del brano oppure incolla un link YouTube."
+            : "Collegamento YouTube trovato sulla pagina Last.fm.");
+    }
+
+    private String read(String url, boolean api) throws IOException {
+        if (System.currentTimeMillis() < retryAfter) throw new IOException("Troppe richieste a Last.fm. Attendi un minuto e riprova.");
+        long deadline = System.nanoTime() + 15_000_000_000L;
+        try {
+            for (int redirects = 0; redirects < 4; redirects++) {
+                if (Thread.currentThread().isInterrupted()) throw new IOException();
+                HttpURLConnection connection = (HttpURLConnection)new URL(url).openConnection();
+                connection.setConnectTimeout(4000); connection.setReadTimeout(4000); connection.setInstanceFollowRedirects(false);
+                connection.setRequestProperty("User-Agent", "Onda/" + BuildConfig.VERSION_NAME);
+                connection.setRequestProperty("Accept", api ? "application/json" : "text/html");
+                try {
+                    int status = connection.getResponseCode();
+                    if (status == 429 || status == 503) {
+                        retryAfter = System.currentTimeMillis() + 60_000;
+                        throw new IOException();
+                    }
+                    if (!api && Arrays.asList(301, 302, 303, 307, 308).contains(status)) {
+                        URI target = new URI(url).resolve(connection.getHeaderField("Location"));
+                        if (!"https".equals(target.getScheme())) throw new IOException();
+                        url = trackUrl(target.toString());
+                        if (System.nanoTime() >= deadline) throw new IOException();
+                        continue;
+                    }
+                    if (status != 200) throw new IOException();
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    try (InputStream in = connection.getInputStream()) {
+                        byte[] buffer = new byte[8192]; int n;
+                        while ((n = in.read(buffer)) != -1) {
+                            if (out.size() + n > 2 * 1024 * 1024 || System.nanoTime() >= deadline || Thread.currentThread().isInterrupted()) throw new IOException();
+                            out.write(buffer, 0, n);
+                        }
+                    }
+                    return out.toString("UTF-8");
+                } finally { connection.disconnect(); }
+            }
+            throw new IOException();
+        } catch (Exception e) {
+            // Never forward URLs, keys, upstream bodies or exception causes to logs/the bridge.
+            throw new IOException(System.currentTimeMillis() < retryAfter ? "Last.fm temporaneamente non disponibile. Attendi un minuto e riprova."
+                : api ? "Ricerca non riuscita. Controlla la connessione e riprova."
+                : "Impossibile leggere il collegamento YouTube. Riprova o apri la pagina Last.fm.");
+        }
+    }
+    private static String encode(String value) throws Exception { return URLEncoder.encode(value, StandardCharsets.UTF_8.name()); }
+}

@@ -8,6 +8,8 @@ La variante Android include ora controllo delle nuove versioni, download e avvio
 
 ## Scarica musica
 
+Dal menu **Cerca musica** puoi cercare brani su Last.fm per titolo e artista, recuperare il collegamento YouTube quando disponibile e avviare il download. Usa la chiave Last.fm già configurata sul telefono. Dettagli e limiti in [SEARCH.md](SEARCH.md).
+
 Dal menu **Scarica musica** puoi aggiungere un video o una playlist YouTube alla libreria come MP3. Download, conversione e importazione avvengono sul telefono, anche mentre usi altre schermate. Last.fm è facoltativo e si configura nella stessa schermata. Dettagli, limiti e prove in [DOWNLOADS.md](DOWNLOADS.md).
 
 ## Compilare su Windows
