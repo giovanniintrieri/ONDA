@@ -36,6 +36,7 @@ public final class MainActivity extends ComponentActivity {
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private final ExecutorService searchIo=Executors.newSingleThreadExecutor();
     private final LastFmSearch musicSearch=new LastFmSearch();
+    private final TrackVideoResolver videoSearch=new TrackVideoResolver(new AudioDbVideo()::find,musicSearch::resolve);
     private LastFmLinkDialog lastFmDialog;
     private final java.util.concurrent.atomic.AtomicBoolean searching=new java.util.concurrent.atomic.AtomicBoolean();
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -159,8 +160,8 @@ ViewCompat.requestApplyInsets(content);
                 if(!searching.compareAndSet(false,true))throw new IllegalStateException("Attendi la ricerca in corso e riprova");
                 searchIo.execute(()->{
                     try{
-                        JSONObject result="searchLastFm".equals(method)?musicSearch.search(p.optString("title"),p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):"searchLastFmArtistTracks".equals(method)?musicSearch.artistTracks(p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):musicSearch.resolve(p.optString("url"));
-                        if("resolveLastFmTrack".equals(method)&&result.optString("url").isEmpty())Diagnostics.record(this,"collegamento Last.fm","LASTFM_PAGE_"+result.optString("status").toUpperCase(Locale.ROOT));
+                        JSONObject result="searchLastFm".equals(method)?musicSearch.search(p.optString("title"),p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):"searchLastFmArtistTracks".equals(method)?musicSearch.artistTracks(p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):videoSearch.resolve(p.optString("url"),p.optString("title"),p.optString("artist"));
+                        if("resolveLastFmTrack".equals(method)&&result.optString("url").isEmpty())Diagnostics.record(this,"ricerca video","VIDEO_API_"+result.optString("apiStatus").toUpperCase(Locale.ROOT)+";LASTFM_PAGE_"+result.optString("pageStatus").toUpperCase(Locale.ROOT));
                         reply(id,result,null);
                     }
                     catch(Exception e){reply(id,null,e);}

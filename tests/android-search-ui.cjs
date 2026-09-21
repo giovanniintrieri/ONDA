@@ -35,7 +35,7 @@ const fs = require('node:fs'), path = require('node:path');
           if (window.failArtist) { window.failArtist = false; error = 'Elenco dei brani Last.fm non disponibile. Riprova.'; }
           else result = { kind: 'tracks', page: params.page, hasMore: params.page === 1, tracks: [{ title: 'Believer', artist: params.artist, url: 'https://www.last.fm/music/Imagine+Dragons/_/Believer' }] };
         } else if (method === 'resolveLastFmTrack') {
-          result = params.url.endsWith('/Other') ? { status: 'verification', url: '', message: 'Last.fm richiede una verifica prima di mostrare la pagina.' } : { status: 'found', url: 'https://www.youtube.com/watch?v=7wtfhZwyrcc', message: 'Collegamento YouTube trovato sulla pagina Last.fm.' };
+          result = params.url.endsWith('/Other') ? { status: 'verification', url: '', message: 'Last.fm richiede una verifica prima di mostrare la pagina.' } : { status: 'found', source: 'TheAudioDB', url: 'https://www.youtube.com/watch?v=7wtfhZwyrcc', message: 'Collegamento YouTube trovato tramite TheAudioDB.' };
         } else if (method === 'openLastFmBrowser') {
           result = window.browserResult || { status: 'cancelled', url: '', message: 'Lettura annullata. Puoi riaprire la pagina Last.fm.' };
         } else if (method === 'startMusicDownloads') {
@@ -82,6 +82,7 @@ const fs = require('node:fs'), path = require('node:path');
     await page.getByRole('button', { name: 'Believer Imagine Dragons' }).click();
     const download = page.getByRole('button', { name: 'Scarica sul telefono' });
     await download.waitFor();
+    assert.deepEqual(await page.evaluate(() => window.calls.findLast(c => c.method === 'resolveLastFmTrack').params), { url: 'https://www.last.fm/music/Imagine+Dragons/_/Believer', title: 'Believer', artist: 'Imagine Dragons' });
     assert.equal(await page.evaluate(() => window.calls.some(c => c.method === 'startMusicDownloads')), false);
     await page.evaluate(() => { window.downloadState.busy = true; document.dispatchEvent(new Event('visibilitychange')); });
     await page.getByText('Un download è già in corso. Puoi continuare a cercare.').waitFor();
@@ -124,7 +125,7 @@ const fs = require('node:fs'), path = require('node:path');
     await page.getByText('1 risultato · pagina 2 · Last.fm', { exact: true }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.calls.findLast(c => c.method === 'searchLastFmArtistTracks').params), { artist: 'Imagine Dragons', page: 2 });
     await page.getByRole('button', { name: 'Believer Imagine Dragons', exact: true }).click();
-    await page.getByText('Collegamento YouTube trovato sulla pagina Last.fm.', { exact: true }).waitFor();
+    await page.getByText('Collegamento YouTube trovato tramite TheAudioDB.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Torna agli artisti' }).click();
     await page.getByText('2 artisti · pagina 2 · Last.fm', { exact: true }).waitFor();
     assert.equal(await page.getByRole('region', { name: 'Brano selezionato' }).count(), 0);

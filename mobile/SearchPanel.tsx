@@ -70,7 +70,7 @@ export function SearchPanel({ onDownloads }: { onDownloads: () => void }) {
     void run(track.url, async current => {
       setReplaceQueue(false); setSelection({ track, url: '', message: 'Cerco il collegamento YouTube…' });
       try {
-        const response = await request<LinkResult>('resolveLastFmTrack', { url: track.url });
+        const response = await request<LinkResult>('resolveLastFmTrack', { url: track.url, title: track.title, artist: track.artist }, 60_000);
         if (current()) setSelection({ track, ...response });
       } catch (e) {
         if (current()) setSelection({ track, url: '', message: 'Collegamento non recuperato. Puoi riprovare o aprire la pagina Last.fm dentro Onda.' });
