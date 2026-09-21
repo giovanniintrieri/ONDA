@@ -3,6 +3,12 @@ import { createRoot } from 'react-dom/client';
 import '../app/globals.css';
 import './native.css';
 import './mobile-player.css';
+import './library-tools.css';
+import { recordUiError, uiErrorReport } from './diagnostic-log';
+import { request } from './bridge';
+
+window.addEventListener('error', event => recordUiError('interfaccia', event.error));
+window.addEventListener('unhandledrejection', event => recordUiError('operazione asincrona', event.reason));
 
 const Home = React.lazy(() => import('./Home'));
 
@@ -13,6 +19,7 @@ class ErrorBoundary extends React.Component<
   state: { error: string | null } = { error: null };
 
   static getDerivedStateFromError(error: unknown) {
+    recordUiError('apertura app', error);
     return {
       error: error instanceof Error
         ? error.name + ': ' + error.message
@@ -31,6 +38,11 @@ class ErrorBoundary extends React.Component<
           <button type="button" className="button primary" onClick={() => location.reload()}>
             Riprova
           </button>
+          <button type="button" className="button outline" onClick={() => {
+            void request('copyDiagnostics', { uiErrors: uiErrorReport() })
+              .then(() => window.alert('Rapporto copiato.'))
+              .catch(() => window.alert('Copia non riuscita.'));
+          }}>Copia diagnostica</button>
         </main>
       );
     }

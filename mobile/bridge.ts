@@ -1,3 +1,4 @@
+import { recordUiError } from './diagnostic-log';
 declare global {
   interface Window { OndaAndroid?: { postMessage(message: string): void }; __ondaReply?: (message: Reply) => void; }
 }
@@ -10,13 +11,13 @@ window.__ondaReply = message => {
   const call = pending.get(message.id!);
   if (!call) return;
   clearTimeout(call.timer); pending.delete(message.id!);
-  if (message.error) call.reject(new Error(message.error)); else call.resolve(message.result);
+  if (message.error) { recordUiError('comando Android', new Error(message.error)); call.reject(new Error(message.error)); } else call.resolve(message.result);
 };
 export function request<T = void>(method: string, params: object = {}, timeout = 30_000): Promise<T> {
   if (!window.OndaAndroid) return Promise.reject(new Error('Apri Onda dall’app Android installata.'));
   return new Promise((resolve, reject) => {
     const id = ++sequence;
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error('Operazione non completata. Riapri l’app per verificare lo stato.')); }, timeout);
+    const timer = setTimeout(() => { pending.delete(id); recordUiError(`timeout ${method}`, new Error()); reject(new Error('Operazione non completata. Riapri l’app per verificare lo stato.')); }, timeout);
     pending.set(id, { resolve, reject, timer });
     try { window.OndaAndroid!.postMessage(JSON.stringify({ id, method, params })); }
     catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }

@@ -29,9 +29,11 @@ public final class PlaybackService extends MediaSessionService {
     private LibraryStore store;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private List<String> original=new ArrayList<>();
-    private boolean shuffle=false,updating=false,counted=false;
+    private boolean shuffle=false,updating=false,counted=false,selecting=false;
     private int repeat=0;
     private String visitId;
+    private long libraryRevision=0;
+    public long libraryRevision(){return libraryRevision;}
     private long heardMs=0,lastClock=0,lastSaved=0,visitDuration=0;
     private final Runnable tick=new Runnable(){@Override public void run(){
         accumulate();
@@ -52,6 +54,7 @@ public final class PlaybackService extends MediaSessionService {
             }
         }).build();
         player.addListener(new Player.Listener(){
+            @Override public void onPlayerError(androidx.media3.common.PlaybackException error){Diagnostics.record(PlaybackService.this,"audio",error.getErrorCodeName());}
             @Override public void onIsPlayingChanged(boolean playing){
                 if(playing){lastClock=SystemClock.elapsedRealtime();handler.removeCallbacks(tick);handler.postDelayed(tick,1000);}
                 else {accumulate();lastClock=0;handler.removeCallbacks(tick);persist();}
@@ -59,12 +62,14 @@ public final class PlaybackService extends MediaSessionService {
             @Override public void onMediaItemTransition(@Nullable MediaItem item,int reason){
                 if(updating)return;
                 finishVisit(reason==Player.MEDIA_ITEM_TRANSITION_REASON_SEEK);
-                if(shuffle&&repeat==1&&reason==Player.MEDIA_ITEM_TRANSITION_REASON_AUTO&&player.getCurrentMediaItemIndex()==0&&visitId!=null){
+                List<String> currentQueue=queueIds();
+                if(shuffle&&repeat==1&&!selecting&&(reason==Player.MEDIA_ITEM_TRANSITION_REASON_AUTO||reason==Player.MEDIA_ITEM_TRANSITION_REASON_SEEK)
+                        &&player.getCurrentMediaItemIndex()==0&&currentQueue.size()>1&&Objects.equals(visitId,currentQueue.get(currentQueue.size()-1))){
                     try {
-                        List<String> ids=QueueOrder.nextCycle(queueIds(),visitId,new Random());
+                        List<String> ids=smartOrder(queueIds(),null,visitId);
                         updating=true;player.setMediaItems(mediaItems(ids),0,0);player.prepare();
                         updating=false;item=player.getCurrentMediaItem();
-                    }catch(Exception e){updating=false;android.util.Log.e("Onda","Riordino della coda non riuscito",e);}
+                    }catch(Exception e){updating=false;Diagnostics.record(PlaybackService.this,"riordino coda",e);android.util.Log.e("Onda","Riordino della coda non riuscito",e);}
                 }
                 resetVisit(item==null?null:item.mediaId);persist();
             }
@@ -75,6 +80,13 @@ public final class PlaybackService extends MediaSessionService {
     public ExoPlayer player(){return player;}
     private static List<String> strings(JSONArray a){List<String> ids=new ArrayList<>();for(int i=0;i<a.length();i++)ids.add(a.optString(i));return QueueOrder.unique(ids);}
     private List<String> queueIds(){List<String> ids=new ArrayList<>();for(int i=0;i<player.getMediaItemCount();i++)ids.add(player.getMediaItemAt(i).mediaId);return ids;}
+    private List<String> smartOrder(List<String> ids,String first,String previous) throws Exception {
+        Map<String,QueueOrder.Details> details=new HashMap<>();
+        Set<String> wanted=new HashSet<>(ids);if(previous!=null)wanted.add(previous);
+        JSONArray tracks=store.all("tracks");
+        for(int i=0;i<tracks.length();i++){JSONObject t=tracks.getJSONObject(i);String id=t.getString("id");if(wanted.contains(id))details.put(id,new QueueOrder.Details(t.optString("artist"),t.optLong("lastPlayed")));}
+        return QueueOrder.smart(ids,first,previous,details,new Random(),System.currentTimeMillis());
+    }
     private List<MediaItem> mediaItems(List<String> ids) throws Exception {
         List<MediaItem> result=new ArrayList<>();
         for(String id:ids){JSONObject t=store.requireTrack(id);File file=LibraryStore.mediaFile(this,id);if(!file.isFile())throw new IllegalArgumentException("File del brano non disponibile");
@@ -84,10 +96,14 @@ public final class PlaybackService extends MediaSessionService {
         }return result;
     }
     public void setQueue(JSONObject args) throws Exception {
-        List<String> ids=strings(args.getJSONArray("ids"));String id=args.getString("startId");
-        if(ids.isEmpty()||!ids.contains(id))throw new IllegalArgumentException("Coda vuota o brano non presente");
+        List<String> ids=strings(args.getJSONArray("ids"));String id=args.optString("startId",null);
+        if(ids.isEmpty()||(id!=null&&!ids.contains(id)))throw new IllegalArgumentException("Coda vuota o brano non presente");
+        List<String> base=new ArrayList<>(ids);
+        boolean random=args.optBoolean("shuffle",false);
+        if(random)ids=smartOrder(ids,id,visitId);
+        if(id==null)id=ids.get(0);
         List<MediaItem> items=mediaItems(ids);finishVisit(true);updating=true;
-        original=args.has("original")?strings(args.getJSONArray("original")):new ArrayList<>(ids);shuffle=args.optBoolean("shuffle",false);
+        original=base;shuffle=random;
         try {player.setMediaItems(items,ids.indexOf(id),0);player.prepare();player.play();resetVisit(id);} finally {updating=false;}
         persist();
     }
@@ -103,7 +119,37 @@ public final class PlaybackService extends MediaSessionService {
     public void toggleShuffle() throws Exception {boolean next=!shuffle;List<String> available=queueIds();
         List<String> base=new ArrayList<>();for(String id:original)if(available.contains(id))base.add(id);for(String id:available)if(!base.contains(id))base.add(id);
         String current=player.getCurrentMediaItem()==null?null:player.getCurrentMediaItem().mediaId;
-        reorder(next?QueueOrder.shuffled(base,current,new Random()):base);shuffle=next;persist();
+        reorder(next?smartOrder(base,current,null):base);shuffle=next;persist();
+    }
+    public JSONObject mergeTracks(JSONObject args) throws Exception {
+        String keep=args.getString("keepId");Set<String> removed=new LinkedHashSet<>(strings(args.getJSONArray("removeIds")));
+        List<String> oldQueue=queueIds();
+        boolean queueAffected=oldQueue.stream().anyMatch(removed::contains);
+        List<String> ids=DuplicateRules.replace(oldQueue,removed,keep);
+        List<MediaItem> items=queueAffected?mediaItems(ids):Collections.emptyList(); // Validate before changing the database.
+        if(!LibraryStore.mediaFile(this,keep).isFile())throw new IllegalArgumentException("La copia da mantenere non è disponibile");
+        accumulate();persist();
+        String current=player.getCurrentMediaItem()==null?null:player.getCurrentMediaItem().mediaId;
+        String selected=removed.contains(current)?keep:current;
+        long position=player.getCurrentPosition();boolean play=player.getPlayWhenReady();
+        JSONObject retained=store.mergeTracks(keep,removed);
+        original=DuplicateRules.replace(original,removed,keep);
+        if(removed.contains(visitId)) { visitId=keep;visitDuration=(long)(retained.optDouble("duration",0)*1000); }
+        if(keep.equals(selected))position=Math.min(position,Math.max(0,(long)(retained.optDouble("duration",0)*1000)-1));
+        updating=true;
+        try {
+            if(queueAffected&&!ids.isEmpty()) {
+                player.setMediaItems(items,Math.max(0,ids.indexOf(selected)),Math.max(0,position));
+                player.prepare();player.setPlayWhenReady(play);
+            }
+        } finally { updating=false;persist(); }
+        for(String id:removed) {
+            java.io.File audio=LibraryStore.mediaFile(this,id),cover=LibraryStore.coverFile(this,id);
+            if(audio.exists()&&!audio.delete())Diagnostics.record(this,"pulizia duplicati","audio non eliminato");
+            if(cover.exists()&&!cover.delete())Diagnostics.record(this,"pulizia duplicati","copertina non eliminata");
+        }
+        libraryRevision++;
+        return retained;
     }
     public void enqueue(String id) throws Exception {if(queueIds().contains(id))return;player.addMediaItem(mediaItems(Collections.singletonList(id)).get(0));original.add(id);persist();}
     public void remove(String id) {if(player.getCurrentMediaItem()!=null&&id.equals(player.getCurrentMediaItem().mediaId)){player.pause();}
@@ -114,7 +160,7 @@ public final class PlaybackService extends MediaSessionService {
     public JSONObject command(String method,JSONObject args) throws Exception {
         switch(method){
             case "setQueue":setQueue(args);break;
-            case "select":int index=queueIds().indexOf(args.getString("id"));if(index<0)throw new IllegalArgumentException("Brano non presente nella coda");player.seekTo(index,0);if(player.getPlaybackState()==Player.STATE_IDLE)player.prepare();player.play();break;
+            case "select":int index=queueIds().indexOf(args.getString("id"));if(index<0)throw new IllegalArgumentException("Brano non presente nella coda");selecting=true;try{player.seekTo(index,0);}finally{selecting=false;}if(player.getPlaybackState()==Player.STATE_IDLE)player.prepare();player.play();break;
             case "play":if(player.getMediaItemCount()>0){if(player.getPlaybackState()==Player.STATE_ENDED){player.seekToDefaultPosition();resetVisit(player.getCurrentMediaItem().mediaId);}if(player.getPlaybackState()==Player.STATE_IDLE)player.prepare();player.play();}break;
             case "pause":player.pause();break;
             case "next":if(player.hasNextMediaItem()){player.seekToNextMediaItem();player.play();}else{finishVisit(true);counted=true;player.pause();}break;
@@ -140,7 +186,7 @@ public final class PlaybackService extends MediaSessionService {
         long now=SystemClock.elapsedRealtime();if(lastClock>0){heardMs+=Math.min(2000,Math.max(0,now-lastClock));}lastClock=player.isPlaying()?now:0;
         if(visitId!=null&&player.getCurrentMediaItem()!=null&&visitId.equals(player.getCurrentMediaItem().mediaId)&&player.getDuration()>0)visitDuration=player.getDuration();
         long threshold=visitDuration>0?Math.min(30_000,visitDuration/2):30_000;
-        if(visitId!=null&&!counted&&heardMs>=threshold){counted=true;store.count(visitId,true);}
+        if(visitId!=null&&!counted&&heardMs>=threshold){counted=true;store.count(visitId,true);libraryRevision++;}
     }
     private void finishVisit(boolean manual){accumulate();if(manual&&visitId!=null&&!counted&&heardMs>500)store.count(visitId,false);}
     private void resetVisit(String id){visitId=id;heardMs=0;counted=false;visitDuration=0;
@@ -150,7 +196,7 @@ public final class PlaybackService extends MediaSessionService {
     private void persist(){
         if(updating)return;
         try {JSONObject state=snapshot().put("original",new JSONArray(original)).put("heardMs",heardMs).put("counted",counted);store.setting("player",state);lastSaved=SystemClock.elapsedRealtime();}
-        catch(Exception e){android.util.Log.e("Onda","Stato non salvato",e);}
+        catch(Exception e){Diagnostics.record(this,"salvataggio lettore",e);android.util.Log.e("Onda","Stato non salvato",e);}
     }
     private void restore(){
         try {Object saved=store.setting("player");if(!(saved instanceof JSONObject))return;JSONObject state=(JSONObject)saved;
@@ -161,7 +207,7 @@ public final class PlaybackService extends MediaSessionService {
             player.setMediaItems(mediaItems(ids),ids.indexOf(id),(long)(state.optDouble("position",0)*1000));player.setVolume((float)state.optDouble("volume",.7));
             setRepeat(state.optInt("repeat",0));resetVisit(id);heardMs=state.optLong("heardMs",0);counted=state.optBoolean("counted",false);
             // Restore paused: never resume unexpectedly after a reboot or process kill.
-        }catch(Exception e){android.util.Log.e("Onda","Ripristino coda non riuscito",e);}finally{updating=false;}
+        }catch(Exception e){Diagnostics.record(this,"ripristino coda",e);android.util.Log.e("Onda","Ripristino coda non riuscito",e);}finally{updating=false;}
     }
     @Override public void onDestroy(){persist();handler.removeCallbacksAndMessages(null);instance=null;if(session!=null)session.release();if(player!=null)player.release();super.onDestroy();}
 }

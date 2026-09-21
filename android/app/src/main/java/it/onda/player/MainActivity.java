@@ -41,9 +41,12 @@ public final class MainActivity extends ComponentActivity {
     private AppUpdates updates;
     private final AppUpdates.Listener updateListener = state -> event("appUpdate", state);
     private boolean pageReady=false,visible=false;
-    private long pickerCall=-1;
+    private long pickerCall=-1, seenLibraryRevision=-1;
     private final Runnable progress=new Runnable(){@Override public void run(){
         if(!visible)return;
+        if(PlaybackService.instance!=null && seenLibraryRevision!=service().libraryRevision()) {
+            seenLibraryRevision=service().libraryRevision();event("libraryChanged",new JSONObject());
+        }
         try{if(controller!=null)event("progress",new JSONObject().put("position",Math.max(0,controller.getCurrentPosition())/1000.0));}catch(Exception ignored){}
         handler.postDelayed(this,500);
     }};
@@ -122,7 +125,7 @@ ViewCompat.requestApplyInsets(content);
         controllerFuture.addListener(()->{
             try{controller=controllerFuture.get();controller.addListener(new Player.Listener(){@Override public void onEvents(Player player,Player.Events events){sendState();}});
                 List<Runnable> calls=new ArrayList<>(awaitingController);awaitingController.clear();calls.forEach(Runnable::run);sendState();
-            }catch(Exception e){android.util.Log.e("Onda","Collegamento al servizio audio non riuscito",e);}
+            }catch(Exception e){Diagnostics.record(this,"collegamento lettore",e);android.util.Log.e("Onda","Collegamento al servizio audio non riuscito",e);}
         },ContextCompat.getMainExecutor(this));
         web.loadUrl("https://appassets.androidplatform.net/assets/ui/index.html");
     }
@@ -131,7 +134,7 @@ ViewCompat.requestApplyInsets(content);
     private void sendState(){if(controller==null||!pageReady)return;try{event("player",service().snapshot());}catch(Exception e){android.util.Log.w("Onda","Stato audio non disponibile",e);}}
     private void deliver(JSONObject value){handler.post(()->{if(!isDestroyed()&&pageReady)web.evaluateJavascript("window.__ondaReply&&window.__ondaReply("+value.toString()+")",null);});}
     private void event(String name,Object data){try{deliver(new JSONObject().put("event",name).put("data",data));}catch(JSONException ignored){}}
-    private void reply(long id,Object result,Exception error){try{JSONObject value=new JSONObject().put("id",id);if(error!=null)value.put("error",error.getMessage()==null?"Operazione non riuscita":error.getMessage());else value.put("result",result==null?JSONObject.NULL:result);deliver(value);}catch(JSONException ignored){}}
+    private void reply(long id,Object result,Exception error){try{JSONObject value=new JSONObject().put("id",id);if(error!=null){Diagnostics.record(this,"operazione app",error);value.put("error",error.getMessage()==null?"Operazione non riuscita":error.getMessage());}else value.put("result",result==null?JSONObject.NULL:result);deliver(value);}catch(JSONException ignored){}}
     private final class Bridge {
         @JavascriptInterface public void postMessage(String raw){
             if(raw==null||raw.length()>210_000)return;
@@ -142,8 +145,20 @@ ViewCompat.requestApplyInsets(content);
     }
     private void dispatch(long id,String method,JSONObject p){
         if(isDestroyed())return;
-        if(Arrays.asList("state","setQueue","select","play","pause","next","previous","seek","repeat","shuffle","volume","enqueue","removeTrack","editTrack").contains(method)&&controller==null){awaitingController.add(()->dispatch(id,method,p));return;}
+        if(Arrays.asList("state","setQueue","select","play","pause","next","previous","seek","repeat","shuffle","volume","enqueue","removeTrack","editTrack","mergeTracks").contains(method)&&controller==null){awaitingController.add(()->dispatch(id,method,p));return;}
         try{
+            if("diagnostics".equals(method)) {
+                JSONObject state=PlaybackService.instance==null?null:service().snapshot();
+                reply(id,Diagnostics.report(this,state,p.optString("uiErrors", "")),null);return;
+            }
+            if("copyDiagnostics".equals(method)) {
+                String report=Diagnostics.report(this,PlaybackService.instance==null?null:service().snapshot(),p.optString("uiErrors", ""));
+                ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Diagnostica Onda",report));
+                reply(id,null,null);return;
+            }
+            if("mergeTracks".equals(method)) {
+                JSONObject result=service().mergeTracks(p);sendState();event("libraryChanged",new JSONObject());reply(id,result,null);return;
+            }
             if("updateState".equals(method)){reply(id,updates.snapshot(),null);return;}
             if("checkUpdate".equals(method)){updates.check(true);reply(id,updates.snapshot(),null);return;}
             if("downloadUpdate".equals(method)){updates.download();reply(id,updates.snapshot(),null);return;}
@@ -207,7 +222,7 @@ ViewCompat.requestApplyInsets(content);
             else for(Uri uri:selection){String name=nameOf(uri);if(AudioImporter.isAudio(name,getContentResolver().getType(uri))){uris.add(uri);names.add(name);}}
             for(int i=0;i<uris.size();i++){
                 try{if(importer.importUri(uris.get(i),names.get(i))==null)duplicates++;else added++;}
-                catch(Exception e){failed++;if(firstError.isEmpty())firstError=names.get(i)+": "+e.getMessage();}
+                catch(Exception e){Diagnostics.record(this,"importazione",e);failed++;if(firstError.isEmpty())firstError=names.get(i)+": "+e.getMessage();}
                 event("importProgress",new JSONObject().put("done",i+1).put("total",uris.size()));
             }
             reply(call,new JSONObject().put("added",added).put("duplicates",duplicates).put("failed",failed).put("error",firstError),null);
