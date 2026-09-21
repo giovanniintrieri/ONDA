@@ -6,6 +6,7 @@ import org.jsoup.nodes.Element;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.*;
 
 /** Read-only Last.fm discovery. Never downloads audio or exposes the API key to the UI. */
@@ -18,7 +19,7 @@ public final class LastFmSearch {
         if (title.isEmpty() && artist.isEmpty()) throw new IOException("Scrivi un titolo o il nome di un artista");
         boolean artists = title.isEmpty();
         JSONObject raw = query(artists ? "artist.search" : "track.search", title, artist, page, key);
-        return artists ? artistResults(raw, page) : results(raw, page);
+        return artists ? artistResults(raw, page) : trackResults(raw, page, title, artist);
     }
 
     public JSONObject artistTracks(String artist, int page, String key) throws Exception {
@@ -89,6 +90,27 @@ public final class LastFmSearch {
         long total = attributes == null ? 0 : attributes.optLong("total", 0);
         return results(new JSONObject().put("results", new JSONObject().put("trackmatches", new JSONObject().put("track", tracks))
             .put("opensearch:totalResults", total)), page);
+    }
+
+    /** Last.fm may match the query against the artist too. Enforce each field locally. */
+    static JSONObject trackResults(JSONObject raw, int page, String title, String artist) throws Exception {
+        JSONObject result = results(raw, page);
+        JSONArray candidates = result.getJSONArray("tracks"), matches = new JSONArray();
+        String titleQuery = searchText(title), artistQuery = searchText(artist);
+        for (int i = 0; i < candidates.length(); i++) {
+            JSONObject track = candidates.getJSONObject(i);
+            if (searchText(track.getString("title")).contains(titleQuery)
+                && (artistQuery.isEmpty() || searchText(track.getString("artist")).contains(artistQuery))) matches.put(track);
+        }
+        // Keep the provider's pagination: a filtered-out page does not imply the next is empty.
+        return result.put("tracks", matches);
+    }
+
+    private static String searchText(String value) {
+        String text = DownloadRules.text(value).toLowerCase(Locale.ROOT);
+        String normalized = Normalizer.normalize(text, Normalizer.Form.NFKD).replaceAll("\\p{M}", "")
+            .replaceAll("[^\\p{L}\\p{N}]+", " ").trim();
+        return normalized.isEmpty() ? text : normalized;
     }
 
     static JSONObject results(JSONObject raw, int page) throws Exception {

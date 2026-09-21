@@ -94,4 +94,36 @@ public class LastFmSearchTest {
         assertThrows(IOException.class,()->LastFmSearch.topTracks(new JSONObject(),1,"Cher"));
         assertThrows(IOException.class,()->LastFmSearch.topTracks(new JSONObject().put("error",10),1,"Cher"));
     }
+    @Test public void titleSearchExcludesMatchesFoundOnlyInTheArtist() throws Exception {
+        JSONArray input=new JSONArray()
+            .put(track("the CuRe","https://www.last.fm/music/Olivia+Rodrigo/_/the+CuRe").put("artist","Olivia Rodrigo"))
+            .put(track("Lovesong","https://www.last.fm/music/The+Cure/_/Lovesong").put("artist","The Cure"))
+            .put(track("Lullaby","https://www.last.fm/music/The+Cure/_/Lullaby").put("artist","The Cure"))
+            .put(track("The Cure (Live)","https://www.last.fm/music/Other/_/The+Cure+(Live)").put("artist","Other"));
+        JSONObject result=LastFmSearch.trackResults(response(input,"100"),1,"the cure","");
+        assertEquals(2,result.getJSONArray("tracks").length());
+        assertEquals("Olivia Rodrigo",result.getJSONArray("tracks").getJSONObject(0).getString("artist"));
+        assertEquals("The Cure (Live)",result.getJSONArray("tracks").getJSONObject(1).getString("title"));
+        assertTrue(result.getBoolean("hasMore"));
+    }
+    @Test public void bothFieldsMustMatchTheirOwnMetadata() throws Exception {
+        JSONArray input=new JSONArray()
+            .put(track("The Cure","https://www.last.fm/music/Lady+Gaga/_/The+Cure").put("artist","Lady Gaga"))
+            .put(track("The Cure","https://www.last.fm/music/Other/_/The+Cure").put("artist","Other"))
+            .put(track("Other","https://www.last.fm/music/Lady+Gaga/_/Other").put("artist","Lady Gaga"));
+        JSONArray result=LastFmSearch.trackResults(response(input,"3"),1,"the cure","lady gaga").getJSONArray("tracks");
+        assertEquals(1,result.length());assertEquals("Lady Gaga",result.getJSONObject(0).getString("artist"));
+    }
+    @Test public void titleMatchingPreservesAccentsCasePunctuationAndPartialSearch() throws Exception {
+        JSONArray input=new JSONArray().put(track("Cariño — Live","https://www.last.fm/music/The+Marias/_/Carino").put("artist","The Marías"));
+        assertEquals(1,LastFmSearch.trackResults(response(input,"1"),1,"  CARINO   live ","marias").getJSONArray("tracks").length());
+        assertEquals(1,LastFmSearch.trackResults(response(input,"1"),1,"cari","").getJSONArray("tracks").length());
+        assertEquals(0,LastFmSearch.trackResults(response(input,"1"),1,"marias","").getJSONArray("tracks").length());
+    }
+    @Test public void emptyFilteredPagesKeepTheNextPageAvailable() throws Exception {
+        JSONObject raw=response(new JSONArray().put(track("Lovesong","https://www.last.fm/music/The+Cure/_/Lovesong").put("artist","The Cure")),"21");
+        JSONObject first=LastFmSearch.trackResults(raw,1,"the cure","");
+        assertEquals(0,first.getJSONArray("tracks").length());assertTrue(first.getBoolean("hasMore"));
+        assertFalse(LastFmSearch.trackResults(raw,2,"the cure","").getBoolean("hasMore"));
+    }
 }
