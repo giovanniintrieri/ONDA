@@ -39,11 +39,15 @@ public final class MainActivity extends ComponentActivity {
     private AudioImporter importer;
     private LibraryStore store;
     private AppUpdates updates;
+    private MusicDownloads downloads;
+    private long seenDownloadRevision=-1;
+    private final ActivityResultLauncher<String> notificationPermission=registerForActivityResult(new ActivityResultContracts.RequestPermission(),granted->{});
     private final AppUpdates.Listener updateListener = state -> event("appUpdate", state);
     private boolean pageReady=false,visible=false;
     private long pickerCall=-1, seenLibraryRevision=-1;
     private final Runnable progress=new Runnable(){@Override public void run(){
         if(!visible)return;
+        if(downloads!=null&&seenDownloadRevision!=downloads.libraryRevision()){seenDownloadRevision=downloads.libraryRevision();event("libraryChanged",new JSONObject());}
         if(PlaybackService.instance!=null && seenLibraryRevision!=service().libraryRevision()) {
             seenLibraryRevision=service().libraryRevision();event("libraryChanged",new JSONObject());
         }
@@ -64,7 +68,7 @@ public final class MainActivity extends ComponentActivity {
 
     @SuppressLint("SetJavaScriptEnabled") @Override public void onCreate(Bundle saved){
         super.onCreate(saved);store=LibraryStore.get(this);importer=new AudioImporter(this);
-        updates=AppUpdates.get(this);
+        updates=AppUpdates.get(this);downloads=MusicDownloads.get(this);
         WindowCompat.setDecorFitsSystemWindows(getWindow(),false);
 android.widget.FrameLayout content =
     new android.widget.FrameLayout(this);
@@ -147,6 +151,16 @@ ViewCompat.requestApplyInsets(content);
         if(isDestroyed())return;
         if(Arrays.asList("state","setQueue","select","play","pause","next","previous","seek","repeat","shuffle","volume","enqueue","removeTrack","editTrack","mergeTracks").contains(method)&&controller==null){awaitingController.add(()->dispatch(id,method,p));return;}
         try{
+            if("musicDownloadState".equals(method)){reply(id,downloads.snapshot(),null);return;}
+            if("configureMusicDownloads".equals(method)){reply(id,downloads.configure(p.optString("key"),p.optBoolean("clear")),null);return;}
+            if("cancelMusicDownloads".equals(method)){downloads.cancel();reply(id,downloads.snapshot(),null);return;}
+            if("startMusicDownloads".equals(method)){
+                if(!visible)throw new IllegalStateException("Apri Onda per avviare il download");
+                JSONObject state=downloads.start(p.optString("url"),p.optBoolean("playlist"),p.optBoolean("resume"));
+                reply(id,state,null);
+                if(Build.VERSION.SDK_INT>=33&&ContextCompat.checkSelfPermission(this,android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS);
+                return;
+            }
             if("diagnostics".equals(method)) {
                 JSONObject state=PlaybackService.instance==null?null:service().snapshot();
                 reply(id,Diagnostics.report(this,state,p.optString("uiErrors", "")),null);return;
