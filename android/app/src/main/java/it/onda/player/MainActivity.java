@@ -36,6 +36,7 @@ public final class MainActivity extends ComponentActivity {
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private final ExecutorService searchIo=Executors.newSingleThreadExecutor();
     private final LastFmSearch musicSearch=new LastFmSearch();
+    private LastFmLinkDialog lastFmDialog;
     private final java.util.concurrent.atomic.AtomicBoolean searching=new java.util.concurrent.atomic.AtomicBoolean();
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final List<Runnable> awaitingController=new ArrayList<>();
@@ -157,10 +158,20 @@ ViewCompat.requestApplyInsets(content);
             if("searchLastFm".equals(method)||"searchLastFmArtistTracks".equals(method)||"resolveLastFmTrack".equals(method)){
                 if(!searching.compareAndSet(false,true))throw new IllegalStateException("Attendi la ricerca in corso e riprova");
                 searchIo.execute(()->{
-                    try{reply(id,"searchLastFm".equals(method)?musicSearch.search(p.optString("title"),p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):"searchLastFmArtistTracks".equals(method)?musicSearch.artistTracks(p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):musicSearch.resolve(p.optString("url")),null);}
+                    try{
+                        JSONObject result="searchLastFm".equals(method)?musicSearch.search(p.optString("title"),p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):"searchLastFmArtistTracks".equals(method)?musicSearch.artistTracks(p.optString("artist"),p.optInt("page",1),downloads.lastFmKey()):musicSearch.resolve(p.optString("url"));
+                        if("resolveLastFmTrack".equals(method)&&result.optString("url").isEmpty())Diagnostics.record(this,"collegamento Last.fm","LASTFM_PAGE_"+result.optString("status").toUpperCase(Locale.ROOT));
+                        reply(id,result,null);
+                    }
                     catch(Exception e){reply(id,null,e);}
                     finally{searching.set(false);}
                 });return;
+            }
+            if("openLastFmBrowser".equals(method)){
+                if(!visible)throw new IllegalStateException("Apri Onda per visualizzare il brano");
+                if(lastFmDialog!=null)throw new IllegalStateException("La pagina Last.fm è già aperta");
+                lastFmDialog=new LastFmLinkDialog(this,LastFmSearch.trackUrl(p.optString("url")),result->{lastFmDialog=null;reply(id,result,null);});
+                try{lastFmDialog.show();}catch(RuntimeException e){lastFmDialog=null;throw e;}return;
             }
             if("openLastFmTrack".equals(method)){
                 if(!visible)throw new IllegalStateException("Apri Onda per visualizzare il brano");
@@ -264,6 +275,7 @@ ViewCompat.requestApplyInsets(content);
         if(updates!=null){updates.observe(updateListener);updates.check(false);}}
     @Override protected void onPause(){visible=false;handler.removeCallbacks(progress);if(updates!=null)updates.remove(updateListener);if(web!=null)web.onPause();super.onPause();}
     @Override protected void onDestroy(){visible=false;handler.removeCallbacksAndMessages(null);awaitingController.clear();
+        if(lastFmDialog!=null)lastFmDialog.dismiss();
         searchIo.shutdownNow();
         if(updates!=null)updates.remove(updateListener);
         if(controllerFuture!=null)MediaController.releaseFuture(controllerFuture);

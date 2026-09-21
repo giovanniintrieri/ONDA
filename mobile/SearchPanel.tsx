@@ -7,7 +7,8 @@ import './search.css';
 type Track = { title: string; artist: string; url: string };
 type Results = { kind: 'tracks' | 'artists'; tracks: Track[]; artists?: { name: string }[]; page: number; hasMore: boolean };
 type Downloads = { busy?: boolean; canResume?: boolean; lastFmConfigured?: boolean };
-type Selection = { track: Track; url: string; message: string };
+type LinkResult = { url: string; message: string; status?: string };
+type Selection = LinkResult & { track: Track };
 
 export function SearchPanel({ onDownloads }: { onDownloads: () => void }) {
   const [title, setTitle] = useState(''), [artist, setArtist] = useState('');
@@ -69,12 +70,20 @@ export function SearchPanel({ onDownloads }: { onDownloads: () => void }) {
     void run(track.url, async current => {
       setReplaceQueue(false); setSelection({ track, url: '', message: 'Cerco il collegamento YouTube…' });
       try {
-        const response = await request<{ url: string; message: string }>('resolveLastFmTrack', { url: track.url });
+        const response = await request<LinkResult>('resolveLastFmTrack', { url: track.url });
         if (current()) setSelection({ track, ...response });
       } catch (e) {
-        if (current()) setSelection({ track, url: '', message: 'Collegamento non recuperato. Puoi riprovare o aprire il brano su Last.fm.' });
+        if (current()) setSelection({ track, url: '', message: 'Collegamento non recuperato. Puoi riprovare o aprire la pagina Last.fm dentro Onda.' });
         throw e;
       }
+    });
+  }
+  function openBrowser() {
+    if (!selection) return;
+    const track = selection.track;
+    void run('browser', async current => {
+      const response = await request<LinkResult>('openLastFmBrowser', { url: track.url }, 150_000);
+      if (current()) setSelection({ track, ...response });
     });
   }
   function download() {
@@ -107,6 +116,7 @@ export function SearchPanel({ onDownloads }: { onDownloads: () => void }) {
         {downloads?.canResume && <label className="download-choice"><input type="checkbox" checked={replaceQueue} onChange={e => setReplaceQueue(e.target.checked)} /><span>Sostituisci la coda interrotta con questo brano. I brani già scaricati restano in libreria.</span></label>}
         <button className="button primary" disabled={!!pending || !downloads || !!stateError || !!downloads.busy || (!!downloads.canResume && !replaceQueue)} onClick={download}><Download size={18} />{pending === 'download' ? 'Avvio download…' : 'Scarica sul telefono'}</button>
       </>}
+      {!selection.url && <button className="button primary" disabled={!!pending} onClick={openBrowser}><ExternalLink size={16} />{pending === 'browser' ? 'Pagina Last.fm aperta…' : 'Apri il brano in Onda'}</button>}
       <div className="download-actions search-links">
         <button className="button subtle" disabled={!!pending} onClick={() => void run('open', async () => { await request('openLastFmTrack', { url: selection.track.url }); })}><ExternalLink size={16} />Apri su Last.fm</button>
         {!selection.url && <><button className="button outline" disabled={!!pending} onClick={() => select(selection.track)}>Riprova collegamento</button><button className="button subtle" onClick={onDownloads}>Incolla link YouTube</button></>}

@@ -1,8 +1,6 @@
 package it.onda.player;
 
 import org.json.*;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Element;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -152,20 +150,13 @@ public final class LastFmSearch {
     }
 
     static String videoFromPage(String html) throws IOException {
-        // Similar tracks also have YouTube links: only the main track's play control is eligible.
-        for (Element link : Jsoup.parse(html).select("a.header-new-playlink[href]")) {
-            try { return DownloadRules.url(link.attr("href"), false); }
-            catch (IllegalArgumentException ignored) { }
-        }
-        return "";
+        try { return LastFmPage.inspect(html, "").optString("url"); }
+        catch (Exception e) { throw new IOException("Pagina Last.fm non leggibile"); }
     }
 
     public JSONObject resolve(String url) throws Exception {
-        String page = read(trackUrl(url), false);
-        String video = videoFromPage(page);
-        return new JSONObject().put("url", video).put("message", video.isEmpty()
-            ? "Il collegamento YouTube non è disponibile o Last.fm ne impedisce la lettura. Apri la pagina del brano oppure incolla un link YouTube."
-            : "Collegamento YouTube trovato sulla pagina Last.fm.");
+        String canonical = trackUrl(url);
+        return LastFmPage.inspect(read(canonical, false), canonical);
     }
 
     private String read(String url, boolean api) throws IOException {
