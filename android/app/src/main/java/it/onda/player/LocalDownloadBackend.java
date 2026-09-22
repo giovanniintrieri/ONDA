@@ -56,14 +56,14 @@ public final class LocalDownloadBackend implements DownloadBackend {
         if(queue.length()==0) throw new IOException("Nessun video accessibile nel link indicato");
         return queue;
     }
-    @Override public Result download(JSONObject entry, File directory, String key, Cancellation cancellation, Progress progress) throws Exception {
+    @Override public Result download(JSONObject entry, File directory, String key, JSONObject searchTrack, Cancellation cancellation, Progress progress) throws Exception {
         String url=DownloadRules.video(entry.getString("id"));
         progress.update("metadata",-1);
         JSONObject info=json(execute(base(Collections.singletonList(url)).addOption("--no-playlist").addOption("--skip-download").addOption("--dump-single-json"),cancellation,null,null,120));
         double duration=info.optDouble("duration",0);
         if(info.optBoolean("is_live") || duration<=0 || !Double.isFinite(duration) || duration>DownloadRules.MAX_SECONDS)
             throw new IOException("Sono ammessi brani con durata nota fino a 60 minuti, esclusi i live in corso");
-        DownloadMetadata.Resolved resolved=metadata.enrich(info,key,cancellation); cancellation.check();
+        DownloadMetadata.Resolved resolved=metadata.enrich(info,searchTrack,key,cancellation); cancellation.check();
         progress.update("downloading",0);
         YoutubeDLRequest request=base(Collections.singletonList(url)).addOption("--no-playlist")
             .addOption("--format","bestaudio[protocol=https]/best[protocol=https]")

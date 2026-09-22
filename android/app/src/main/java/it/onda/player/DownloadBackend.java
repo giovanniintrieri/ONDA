@@ -16,7 +16,7 @@ public interface DownloadBackend {
     }
     void prepare(Cancellation cancellation) throws Exception;
     JSONArray inspect(String url, boolean playlist, Cancellation cancellation) throws Exception;
-    Result download(JSONObject entry, File directory, String lastFmKey, Cancellation cancellation, Progress progress) throws Exception;
+    Result download(JSONObject entry, File directory, String lastFmKey, JSONObject searchTrack, Cancellation cancellation, Progress progress) throws Exception;
     final class Result {
         public final File file;
         public final JSONObject metadata;

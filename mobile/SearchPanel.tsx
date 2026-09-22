@@ -89,7 +89,7 @@ export function SearchPanel({ onDownloads }: { onDownloads: () => void }) {
   function download() {
     if (!selection?.url) return;
     void run('download', async current => {
-      await request('startMusicDownloads', { url: selection.url, playlist: false, fromSearch: true, replaceInterrupted: replaceQueue });
+      await request('startMusicDownloads', { url: selection.url, title: selection.track.title, artist: selection.track.artist, playlist: false, fromSearch: true, replaceInterrupted: replaceQueue });
       if (current()) onDownloads();
     });
   }

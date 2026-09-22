@@ -185,7 +185,7 @@ ViewCompat.requestApplyInsets(content);
             if("cancelMusicDownloads".equals(method)){downloads.cancel();reply(id,downloads.snapshot(),null);return;}
             if("startMusicDownloads".equals(method)){
                 if(!visible)throw new IllegalStateException("Apri Onda per avviare il download");
-                JSONObject state=p.optBoolean("fromSearch")?downloads.startFromSearch(p.optString("url"),p.optBoolean("replaceInterrupted")):downloads.start(p.optString("url"),p.optBoolean("playlist"),p.optBoolean("resume"));
+                JSONObject state=p.optBoolean("fromSearch")?downloads.startFromSearch(p.optString("url"),p.optString("title"),p.optString("artist"),p.optBoolean("replaceInterrupted")):downloads.start(p.optString("url"),p.optBoolean("playlist"),p.optBoolean("resume"));
                 reply(id,state,null);
                 if(Build.VERSION.SDK_INT>=33&&ContextCompat.checkSelfPermission(this,android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS);
                 return;
