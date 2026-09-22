@@ -56,15 +56,18 @@ public final class MusicDownloads {
         }
         return snapshot();
     }
-    public synchronized JSONObject startFromSearch(String url,boolean replaceInterrupted) throws Exception {
+    public synchronized JSONObject startFromSearch(String url,String title,String artist,boolean replaceInterrupted) throws Exception {
         if(snapshot().optBoolean("canResume")&&!replaceInterrupted)throw new IllegalStateException("Hai una coda interrotta. Conferma la sostituzione oppure riprendila in Scarica musica.");
-        return start(url,false,false);
+        return start(url,false,false,DownloadMetadata.searchTrack(url,title,artist));
     }
     public synchronized JSONObject start(String url,boolean playlist,boolean resume) throws Exception {
+        return start(url,playlist,resume,null);
+    }
+    private JSONObject start(String url,boolean playlist,boolean resume,JSONObject searchTrack) throws Exception {
         if(state.optBoolean("busy")||running)throw new IllegalStateException("Una coda è già in corso");
         if(resume) {
             if(!snapshot().optBoolean("canResume"))throw new IllegalStateException("Non ci sono download da riprendere");
-        }else state=new JSONObject().put("url",DownloadRules.url(url,playlist)).put("playlist",playlist);
+        }else state=new JSONObject().put("url",DownloadRules.url(url,playlist)).put("playlist",playlist).put("searchTrack",searchTrack);
         cancellation=new DownloadBackend.Cancellation();
         put(state,"busy",true);put(state,"stage","preparing");put(state,"message","");put(state,"percent",-1);
         persist();
@@ -112,6 +115,7 @@ public final class MusicDownloads {
             LibraryStore store=LibraryStore.get(context);
             AudioImporter importer=new AudioImporter(context);
             String key=preferences.getString("lastFmKey","");
+            JSONObject searchTrack=state.optBoolean("playlist")?null:state.optJSONObject("searchTrack");
             for(int i=0;i<entries.length();i++) {
                 cancellation.check();
                 JSONObject item=entries.getJSONObject(i);
@@ -123,7 +127,7 @@ public final class MusicDownloads {
                 if(!directory.mkdirs())throw new IOException("Memoria temporanea non disponibile");
                 entry(item,"working","");
                 try {
-                    DownloadBackend.Result result=backend.download(item,directory,key,cancellation,this::stage);
+                    DownloadBackend.Result result=backend.download(item,directory,key,searchTrack,cancellation,this::stage);
                     cancellation.check();stage("importing",-1);
                     JSONObject imported=importer.importDownload(result.file,DownloadRules.filename(result.metadata.getString("title")),result.metadata);
                     if(imported!=null) {

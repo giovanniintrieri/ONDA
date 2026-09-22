@@ -43,11 +43,30 @@ public final class DownloadMetadata {
             .put("album", structured ? DownloadRules.text(info.optString("album")) : "")
             .put("genre", structured ? DownloadRules.text(info.optString("genre")) : "");
     }
+    /** Keep the chosen identity tied to its video, including after the queue is restored. */
+    static JSONObject searchTrack(String url, String title, String artist) throws Exception {
+        title = DownloadRules.text(title); artist = DownloadRules.text(artist);
+        if (title.isEmpty() || artist.isEmpty()) throw new IllegalArgumentException("Seleziona un brano con titolo e artista prima di scaricare");
+        return new JSONObject().put("url",DownloadRules.url(url,false)).put("title",title).put("artist",artist);
+    }
+    private static JSONObject selectedTags(JSONObject info, JSONObject searchTrack) throws Exception {
+        if (searchTrack == null || SPECIAL.matcher(info.optString("title")).find()) return null;
+        String id = info.optString("id"), title = DownloadRules.text(searchTrack.optString("title")), artist = DownloadRules.text(searchTrack.optString("artist"));
+        if (!id.matches("[A-Za-z0-9_-]{11}") || !DownloadRules.video(id).equals(searchTrack.optString("url")) || title.isEmpty() || artist.isEmpty()) return null;
+        // Album/genre from the video may belong to a different recording; enrich the chosen track instead.
+        return new JSONObject().put("title",title).put("artist",artist).put("album","").put("genre","");
+    }
     static Resolved resolve(JSONObject info, Source source) throws Exception {
-        JSONObject tags = fallback(info);
-        if (source == null) return new Resolved(tags, "Metadati YouTube · Last.fm non configurato");
+        return resolve(info,null,source);
+    }
+    static Resolved resolve(JSONObject info, JSONObject searchTrack, Source source) throws Exception {
+        JSONObject tags = selectedTags(info,searchTrack);
+        boolean selected = tags != null;
+        if (!selected) tags = fallback(info);
+        String origin = selected ? "Metadati del brano selezionato" : "Metadati YouTube";
+        if (source == null) return new Resolved(tags, origin + " · Last.fm non configurato");
         if (tags.optString("artist").isEmpty() || SPECIAL.matcher(info.optString("title")).find())
-            return new Resolved(tags, "Metadati YouTube · versione non verificata su Last.fm");
+            return new Resolved(tags, origin + " · versione non verificata su Last.fm");
         LinkedHashMap<String,String> genres = new LinkedHashMap<>();
         boolean matched = false;
         try {
@@ -56,10 +75,10 @@ public final class DownloadMetadata {
             JSONObject track = response.optJSONObject("track");
             if (track == null || !DownloadRules.key(title).equals(DownloadRules.key(track.optString("name"))) ||
                 !DownloadRules.key(artist).equals(DownloadRules.key(track.optJSONObject("artist") == null ? "" : track.getJSONObject("artist").optString("name"))))
-                return new Resolved(tags, "Metadati YouTube · nessuna corrispondenza sicura su Last.fm");
+                return new Resolved(tags, origin + " · nessuna corrispondenza sicura su Last.fm");
             double seconds = track.optDouble("duration",0) / 1000, duration = info.optDouble("duration",0);
             if (seconds > 0 && duration > 0 && Math.abs(seconds-duration) > 15)
-                return new Resolved(tags, "Metadati YouTube · durata Last.fm diversa");
+                return new Resolved(tags, origin + " · durata Last.fm diversa");
             matched = true;
             tags.put("title",DownloadRules.text(track.optString("name"))).put("artist",DownloadRules.text(track.getJSONObject("artist").optString("name")));
             if (track.optJSONObject("album") != null && !DownloadRules.text(track.getJSONObject("album").optString("title")).isEmpty()) tags.put("album",DownloadRules.text(track.getJSONObject("album").optString("title")));
@@ -73,7 +92,7 @@ public final class DownloadMetadata {
         } catch (Exception ignored) {
             // Do not expose request URLs, API keys or upstream error bodies to the WebView/logs.
             if (!genres.isEmpty()) tags.put("genre",String.join("; ",genres.values()));
-            return new Resolved(tags, matched ? "Metadati Last.fm · alcuni tag non disponibili" : "Last.fm non disponibile · mantenuti i metadati YouTube");
+            return new Resolved(tags, matched ? "Metadati Last.fm · alcuni tag non disponibili" : selected ? "Last.fm non disponibile · mantenuti titolo e artista selezionati" : "Last.fm non disponibile · mantenuti i metadati YouTube");
         }
         if (!genres.isEmpty()) tags.put("genre",String.join("; ",genres.values()));
         return new Resolved(tags,"Metadati Last.fm");
@@ -92,9 +111,9 @@ public final class DownloadMetadata {
     public static final class Client {
         private final Map<String,JSONObject> cache = new LinkedHashMap<>();
         private long nextRequest, retryAfter;
-        public Resolved enrich(JSONObject info, String apiKey, DownloadBackend.Cancellation cancellation) throws Exception {
+        public Resolved enrich(JSONObject info, JSONObject searchTrack, String apiKey, DownloadBackend.Cancellation cancellation) throws Exception {
             long deadline = System.nanoTime() + 12_000_000_000L;
-            return resolve(info, apiKey.isEmpty() ? null : (method,artist,title) -> {
+            return resolve(info, searchTrack, apiKey.isEmpty() ? null : (method,artist,title) -> {
                 cancellation.check();
                 String key = method + "\n" + artist + "\n" + title;
                 if (cache.containsKey(key)) return cache.get(key);

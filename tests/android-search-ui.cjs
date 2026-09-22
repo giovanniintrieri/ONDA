@@ -27,6 +27,7 @@ const fs = require('node:fs'), path = require('node:path');
         else if (method === 'searchLastFm') {
           if (!params.title) result = { kind: 'artists', tracks: [], artists: params.artist === 'vuoto' ? [] : [{ name: 'Imagine Dragons' }, { name: 'Imagine Dragons Tribute' }], page: params.page, hasMore: params.page === 1 };
           else if (params.title === 'errore') error = 'Ricerca non riuscita. Controlla la connessione e riprova.';
+          else if (params.title === 'The glue song') result = { kind: 'tracks', page: 1, hasMore: false, tracks: [{ title: 'the glue song', artist: 'beabadoobee', url: 'https://www.last.fm/music/beabadoobee/_/the+glue+song' }] };
           else result = { page: params.page, hasMore: params.page === 1, tracks: params.title === 'vuoto' ? [] : [
             { title: 'Believer', artist: 'Imagine Dragons', url: 'https://www.last.fm/music/Imagine+Dragons/_/Believer' },
             { title: 'Un titolo molto lungo con caratteri speciali: Cariño & musica', artist: 'Artista dal nome molto lungo', url: 'https://www.last.fm/music/Artist/_/Other' },
@@ -35,7 +36,7 @@ const fs = require('node:fs'), path = require('node:path');
           if (window.failArtist) { window.failArtist = false; error = 'Elenco dei brani Last.fm non disponibile. Riprova.'; }
           else result = { kind: 'tracks', page: params.page, hasMore: params.page === 1, tracks: [{ title: 'Believer', artist: params.artist, url: 'https://www.last.fm/music/Imagine+Dragons/_/Believer' }] };
         } else if (method === 'resolveLastFmTrack') {
-          result = params.url.endsWith('/Other') ? { status: 'verification', url: '', message: 'Last.fm richiede una verifica prima di mostrare la pagina.' } : { status: 'found', source: 'TheAudioDB', url: 'https://www.youtube.com/watch?v=7wtfhZwyrcc', message: 'Collegamento YouTube trovato tramite TheAudioDB.' };
+          result = params.url.endsWith('/Other') || params.artist === 'beabadoobee' ? { status: 'verification', url: '', message: 'Last.fm richiede una verifica prima di mostrare la pagina.' } : { status: 'found', source: 'TheAudioDB', url: 'https://www.youtube.com/watch?v=7wtfhZwyrcc', message: 'Collegamento YouTube trovato tramite TheAudioDB.' };
         } else if (method === 'openLastFmBrowser') {
           result = window.browserResult || { status: 'cancelled', url: '', message: 'Lettura annullata. Puoi riaprire la pagina Last.fm.' };
         } else if (method === 'startMusicDownloads') {
@@ -98,7 +99,20 @@ const fs = require('node:fs'), path = require('node:path');
     }
     await download.click();
     await page.getByRole('heading', { name: 'Scarica musica.' }).waitFor();
-    assert.deepEqual(await page.evaluate(() => window.calls.findLast(c => c.method === 'startMusicDownloads').params), { url: 'https://www.youtube.com/watch?v=7wtfhZwyrcc', playlist: false, fromSearch: true, replaceInterrupted: true });
+    assert.deepEqual(await page.evaluate(() => window.calls.findLast(c => c.method === 'startMusicDownloads').params), { url: 'https://www.youtube.com/watch?v=7wtfhZwyrcc', title: 'Believer', artist: 'Imagine Dragons', playlist: false, fromSearch: true, replaceInterrupted: true });
+    await page.evaluate(() => { window.downloadState = { lastFmConfigured: true }; });
+    await openSearch();
+    await page.getByLabel('Titolo del brano').fill('The glue song');
+    await page.getByRole('button', { name: 'Cerca brani' }).click();
+    await page.getByRole('button', { name: 'the glue song beabadoobee', exact: true }).click();
+    await page.evaluate(() => { window.browserResult = { status: 'found', url: 'https://www.youtube.com/watch?v=GlueSong123', message: 'Collegamento YouTube recuperato dalla pagina aperta in Onda.' }; });
+    await page.getByRole('button', { name: 'Apri il brano in Onda', exact: true }).click();
+    await page.getByText('Collegamento YouTube recuperato dalla pagina aperta in Onda.', { exact: true }).waitFor();
+    await page.getByLabel('Titolo del brano').fill('Un’altra ricerca non inviata');
+    await page.getByLabel('Artista', { exact: true }).fill('Un altro artista');
+    await page.getByRole('button', { name: 'Scarica sul telefono' }).click();
+    await page.getByRole('heading', { name: 'Scarica musica.' }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.calls.findLast(c => c.method === 'startMusicDownloads').params), { url: 'https://www.youtube.com/watch?v=GlueSong123', title: 'the glue song', artist: 'beabadoobee', playlist: false, fromSearch: true, replaceInterrupted: false });
     await openSearch();
     await page.getByLabel('Titolo del brano').fill('vuoto');
     await page.getByRole('button', { name: 'Cerca brani' }).click();
@@ -140,6 +154,6 @@ const fs = require('node:fs'), path = require('node:path');
     await page.getByLabel('Artista', { exact: true }).fill('');
     assert.equal(await page.getByRole('button', { name: 'Cerca brani', exact: true }).isDisabled(), true);
     assert.deepEqual(errors, []);
-    console.log('Search UI passed: artist-only search, artist tracks and pagination, return to artist results, empty/error artist states, key setup, search/filter, pagination, verification, browser cancellation/link recovery, busy/interrupted queue, explicit download, empty/error states, 390/320px.');
+    console.log('Search UI passed: selected title/artist reach downloads through API and browser recovery, Glue Song regression, edited search fields cannot change the selection, artist-only search, artist tracks and pagination, return to artist results, empty/error artist states, key setup, search/filter, pagination, verification, browser cancellation/link recovery, busy/interrupted queue, explicit download, empty/error states, 390/320px.');
   } finally { await browser.close(); server.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
